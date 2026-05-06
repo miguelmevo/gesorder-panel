@@ -183,8 +183,23 @@ def recover_stuck():
 def update_active():
     """MT5 EA reporta sus órdenes pendientes activas (reemplaza todo)."""
     global active_orders, ea_last_seen
-    ea_last_seen  = now_str()
-    active_orders = request.get_json(force=True) or []
+    ea_last_seen = now_str()
+    
+    try:
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            # Intentar limpiar el body manualmente
+            raw = request.get_data(as_text=True)
+            # Reemplazar comas decimales por puntos si el locale de MT5 usa coma
+            import re
+            raw_fixed = re.sub(r'(\d),(\d)', r'\1.\2', raw)
+            import json as json_lib
+            data = json_lib.loads(raw_fixed)
+        active_orders = data if isinstance(data, list) else []
+    except Exception as e:
+        print(f"[{now_str()}] Error parseando active orders: {e} | raw: {request.get_data(as_text=True)[:200]}")
+        return jsonify({"ok": False, "error": str(e)}), 400
+    
     return jsonify({"ok": True, "count": len(active_orders)})
 
 @app.route("/api/orders/active", methods=["GET"])
