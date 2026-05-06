@@ -101,9 +101,8 @@
     flex: 1;
     display: grid;
     grid-template-columns: 380px 1fr;
-    grid-template-rows: 1fr;
-    gap: 0;
     min-height: calc(100vh - 52px);
+    align-items: stretch;
   }
 
   /* ── LEFT PANEL - FORM ────────────────────────────────── */
@@ -290,17 +289,24 @@
 
   /* ── RIGHT PANEL - ORDERS ─────────────────────────────── */
   .orders-panel {
-    display: flex;
-    flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 0;
+    width: 100%;
     overflow: hidden;
+    height: calc(100vh - 52px);
   }
 
   .orders-toolbar {
-    padding: 12px 20px;
+    padding: 10px 20px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    background: var(--bg2);
   }
   .refresh-btn {
     padding: 6px 14px;
@@ -331,8 +337,14 @@
   .auto-toggle { cursor: pointer; }
 
   /* Table */
-  .table-wrap { flex: 1; overflow-y: auto; }
-  table { width: 100%; border-collapse: collapse; }
+  .table-wrap {
+    flex: 1 1 0;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-height: 0;
+    width: 100%;
+  }
+  table { width: 100%; border-collapse: collapse; min-width: 600px; }
   thead th {
     padding: 10px 14px;
     text-align: left;
@@ -599,22 +611,6 @@
         <input type="text" id="comment" placeholder="Mi setup...">
       </div>
 
-      <!-- Risk preview -->
-      <div class="risk-preview">
-        <div class="risk-item">
-          <div class="risk-label">Lotes Est.</div>
-          <div class="risk-value" id="prev-lots">—</div>
-        </div>
-        <div class="risk-item">
-          <div class="risk-label">Riesgo USD</div>
-          <div class="risk-value warn" id="prev-risk">—</div>
-        </div>
-        <div class="risk-item">
-          <div class="risk-label">RR Ratio</div>
-          <div class="risk-value" id="prev-rr">—</div>
-        </div>
-      </div>
-
       <!-- Botón enviar -->
       <button class="submit-btn buy" id="submit-btn" onclick="submitOrder()">
         ▸ ENVIAR A MT5
@@ -622,30 +618,31 @@
 
     </div><!-- /form-body -->
 
-    <!-- Local queue -->
-    <div class="queue-section">
-      <div class="queue-title">
-        Cola local
-        <span class="badge" id="queue-badge">0</span>
-      </div>
-      <div class="local-queue" id="local-queue">
-        <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">Sin órdenes en cola</div>
-      </div>
-    </div>
-
   </div><!-- /form-panel -->
 
   <!-- RIGHT: ORDERS FROM MT5 -->
   <div class="orders-panel">
     <div class="orders-toolbar">
-      <div class="panel-header" style="padding:0;border:none">Órdenes Pendientes MT5</div>
-      <button class="refresh-btn" onclick="loadOrders()">↻ Actualizar</button>
-      <div class="orders-count">Total: <span id="orders-count">—</span></div>
-      <div class="auto-badge">
-        <label class="auto-toggle">
-          <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()">
-          Auto-refresh
+      <!-- Izquierda -->
+      <div class="panel-header" style="padding:0;border:none;white-space:nowrap">Órdenes Pendientes MT5</div>
+      <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()">↻ Actualizar</button>
+      <!-- Derecha: empujar con margin-left auto -->
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-shrink:0">
+        <div class="orders-count" style="white-space:nowrap">Total: <span id="orders-count">—</span></div>
+        <div class="divider"></div>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()" style="display:none">
+          <span id="ar-toggle" style="width:28px;height:15px;background:var(--accent);border-radius:8px;position:relative;display:inline-block;transition:background .2s;flex-shrink:0">
+            <span style="position:absolute;top:2px;left:2px;width:11px;height:11px;background:#fff;border-radius:50%;transition:transform .2s;transform:translateX(13px)"></span>
+          </span>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2);position:relative">
+            Auto-refresh
+            <span id="refresh-progress-wrap" style="position:absolute;bottom:-4px;left:0;width:100%;height:2px;background:var(--border);border-radius:2px">
+              <span id="refresh-progress" style="display:block;height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width 0.1s linear"></span>
+            </span>
+          </span>
         </label>
+        <span id="last-update" style="color:var(--text3);font-family:var(--font-mono);font-size:10px;white-space:nowrap">—</span>
       </div>
     </div>
     <div class="table-wrap">
@@ -713,11 +710,12 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateClock, 1000);
   updateApiUrlDisplay();
   if(BRIDGE_URL) {
-    checkConnection();
+    checkConnection().then(() => {
+      if(document.getElementById('auto-refresh').checked) startAutoRefreshCycle();
+    });
   } else {
     openModal();
   }
-  toggleAutoRefresh();
 });
 
 function updateClock() {
@@ -893,15 +891,12 @@ async function submitOrder() {
     lots:       state.risk_mode === 'LOTS' ? risk_val : 0.01,
   };
 
-  // Agregar a cola local siempre
-  state.queue.push({...order, id: Date.now()});
-  renderQueue();
-
-  // Enviar si conectado
+  // Solo agregar a cola local si NO hay conexión
   if(state.connected) {
     await sendOrder(order);
   } else {
-    toast('Sin conexión — orden en cola local', 'info');
+    state.queue.push({...order, id: Date.now()});
+    toast('Sin conexión — orden guardada en cola local', 'info');
   }
 }
 
@@ -917,12 +912,15 @@ async function sendOrder(order) {
       toast(`✓ Orden enviada: ${order.type} ${order.symbol} @ ${order.entry}`, 'success');
       loadOrders();
     } else {
-      toast('Error: ' + (data.error || 'desconocido'), 'error');
+      // Falló el envío — guardar en cola local
+      state.queue.push({...order, id: Date.now()});
+      toast('Error al enviar — orden en cola local: ' + (data.error || 'desconocido'), 'error');
     }
   } catch(e) {
     state.connected = false;
     setBadge(false);
-    toast('Error de conexión con bridge.py', 'error');
+    state.queue.push({...order, id: Date.now()});
+    toast('Sin conexión — orden guardada en cola local', 'error');
   }
 }
 
@@ -958,11 +956,16 @@ function removeQueue(id) {
 async function loadOrders() {
   if(!state.connected) { await checkConnection(); if(!state.connected) return; }
   try {
-    const r = await fetch(`${BRIDGE_URL}/api/orders`);
+    const r = await fetch(`${BRIDGE_URL}/api/orders/active`);
     const orders = await r.json();
     renderOrders(orders);
     document.getElementById('pending-count').textContent = orders.length;
     document.getElementById('orders-count').textContent  = orders.length;
+    // Actualizar timestamp
+    const now = new Date();
+    const ts = now.toLocaleDateString('es-CL', {day:'2-digit',month:'2-digit'}) + ' ' +
+               now.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    document.getElementById('last-update').textContent = 'Últ. actualización: ' + ts;
   } catch {
     state.connected = false;
     setBadge(false);
@@ -1011,10 +1014,94 @@ async function cancelOrder(ticket, symbol) {
 }
 
 // ── AUTO REFRESH ──────────────────────────────────────────────────────────
+const REFRESH_INTERVAL = 5000; // 5 segundos
+let progressInterval   = null;
+let progressStart      = null;
+
+function updateToggleVisual() {
+  const checked = document.getElementById('auto-refresh').checked;
+  const tog     = document.getElementById('ar-toggle');
+  if(!tog) return;
+  const knob = tog.querySelector('span');
+  if(checked) {
+    tog.style.background = 'var(--accent)';
+    knob.style.transform = 'translateX(13px)';
+  } else {
+    tog.style.background = 'var(--border2)';
+    knob.style.transform = 'translateX(0px)';
+  }
+}
+
 function toggleAutoRefresh() {
   clearInterval(state.autoInterval);
+  clearInterval(progressInterval);
+  const bar = document.getElementById('refresh-progress');
+  if(bar) bar.style.width = '0%';
+  updateToggleVisual();
   if(document.getElementById('auto-refresh').checked) {
-    state.autoInterval = setInterval(() => { loadOrders(); checkConnection(); }, 5000);
+    startAutoRefreshCycle();
+  }
+}
+
+function startAutoRefreshCycle() {
+  progressStart = Date.now();
+
+  // Animar barra de progreso cada 100ms
+  clearInterval(progressInterval);
+  progressInterval = setInterval(() => {
+    const elapsed  = Date.now() - progressStart;
+    const pct      = Math.min((elapsed / REFRESH_INTERVAL) * 100, 100);
+    const bar      = document.getElementById('refresh-progress');
+    if(bar) bar.style.width = pct + '%';
+  }, 100);
+
+  // Al cumplir el intervalo, refrescar y reiniciar
+  state.autoInterval = setTimeout(async () => {
+    clearInterval(progressInterval);
+    const bar = document.getElementById('refresh-progress');
+    if(bar) bar.style.width = '100%';
+    await loadOrders();
+    await checkConnection();
+    // Reiniciar ciclo si sigue activado
+    if(document.getElementById('auto-refresh').checked) {
+      setTimeout(() => {
+        if(bar) bar.style.width = '0%';
+        startAutoRefreshCycle();
+      }, 200);
+    }
+  }, REFRESH_INTERVAL);
+}
+
+async function manualRefresh() {
+  const btn = document.getElementById('refresh-btn');
+  // Feedback visual inmediato
+  btn.textContent  = '↻ Actualizando...';
+  btn.style.color  = 'var(--accent)';
+  btn.style.borderColor = 'var(--accent)';
+  btn.disabled     = true;
+
+  await loadOrders();
+  await checkConnection();
+
+  // Feedback de éxito
+  btn.textContent  = '✓ Actualizado';
+  btn.style.color  = 'var(--buy)';
+  btn.style.borderColor = 'var(--buy)';
+
+  setTimeout(() => {
+    btn.textContent  = '↻ Actualizar';
+    btn.style.color  = '';
+    btn.style.borderColor = '';
+    btn.disabled     = false;
+  }, 1500);
+
+  // Reiniciar ciclo de auto-refresh desde cero
+  if(document.getElementById('auto-refresh').checked) {
+    clearInterval(state.autoInterval);
+    clearInterval(progressInterval);
+    const bar = document.getElementById('refresh-progress');
+    if(bar) bar.style.width = '0%';
+    startAutoRefreshCycle();
   }
 }
 
