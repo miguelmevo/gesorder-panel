@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GesOrder Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0d0d15;
+    --bg2:       #12121e;
+    --bg3:       #1a1a2a;
+    --border:    #2a2a42;
+    --border2:   #3a3a58;
+    --buy:       #1aff7a;
+    --buy-dim:   #0d8040;
+    --buy-bg:    rgba(26,255,122,0.07);
+    --sell:      #ff3a5c;
+    --sell-dim:  #8a1f30;
+    --sell-bg:   rgba(255,58,92,0.07);
+    --accent:    #5a8cff;
+    --accent-bg: rgba(90,140,255,0.1);
+    --text:      #e8e8f0;
+    --text2:     #8888aa;
+    --text3:     #555577;
+    --warn:      #ffaa1a;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-ui:   'Syne', sans-serif;
+    --r:         4px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP BAR ─────────────────────────────────────────── */
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 0.5px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+  .topbar-mid { flex: 1; }
+
+  .conn-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all .2s;
+  }
+  .conn-badge.connected    { border-color: var(--buy-dim); color: var(--buy); background: var(--buy-bg); }
+  .conn-badge.disconnected { border-color: var(--sell-dim); color: var(--sell); background: var(--sell-bg); }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .connected .conn-dot    { background: var(--buy); animation: pulse 2s infinite; }
+  .disconnected .conn-dot { background: var(--sell); }
+
+  .account-info {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .account-info span { color: var(--text); }
+
+  /* ── MAIN LAYOUT ──────────────────────────────────────── */
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    grid-template-rows: 1fr;
+    gap: 0;
+    min-height: calc(100vh - 52px);
+  }
+
+  /* ── LEFT PANEL - FORM ────────────────────────────────── */
+  .form-panel {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .panel-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-header::before {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .form-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* Type selector */
+  .type-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .type-btn {
+    padding: 8px 4px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text2);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    border-radius: var(--r);
+    text-align: center;
+    transition: all .15s;
+    line-height: 1.3;
+  }
+  .type-btn:hover { border-color: var(--border2); color: var(--text); }
+  .type-btn.active-buy  { border-color: var(--buy); background: var(--buy-bg); color: var(--buy); font-weight: 700; }
+  .type-btn.active-sell { border-color: var(--sell); background: var(--sell-bg); color: var(--sell); font-weight: 700; }
+
+  /* Fields */
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field-row { display: grid; gap: 10px; }
+  .field-row.col2 { grid-template-columns: 1fr 1fr; }
+  .field-row.col3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  input, select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 9px 11px;
+    border-radius: var(--r);
+    width: 100%;
+    outline: none;
+    transition: border-color .15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--text3); }
+  input.buy-field:focus  { border-color: var(--buy); }
+  input.sell-field:focus { border-color: var(--sell); }
+
+  select option { background: var(--bg3); }
+
+  /* Mode toggles */
+  .toggle-row {
+    display: flex;
+    gap: 1px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 2px;
+  }
+  .toggle-btn {
+    flex: 1;
+    padding: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text2);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all .15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  /* Risk preview */
+  .risk-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .risk-item { text-align: center; }
+  .risk-label { font-size: 9px; font-family: var(--font-mono); color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+  .risk-value { font-size: 14px; font-family: var(--font-mono); font-weight: 700; color: var(--text); }
+  .risk-value.buy  { color: var(--buy); }
+  .risk-value.sell { color: var(--sell); }
+  .risk-value.warn { color: var(--warn); }
+
+  /* Submit button */
+  .submit-btn {
+    padding: 13px;
+    border: none;
+    border-radius: var(--r);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+  }
+  .submit-btn.buy  { background: var(--buy); color: #000; }
+  .submit-btn.sell { background: var(--sell); color: #fff; }
+  .submit-btn:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 4px 20px rgba(0,0,0,.4); }
+  .submit-btn:active { transform: translateY(0); }
+  .submit-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  /* Quick queue (local) */
+  .queue-section {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    flex: 1;
+  }
+  .queue-title {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+
+  /* ── RIGHT PANEL - ORDERS ─────────────────────────────── */
+  .orders-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .orders-toolbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .refresh-btn {
+    padding: 6px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--text); }
+  .orders-count { font-family: var(--font-mono); font-size: 11px; color: var(--text2); }
+  .orders-count span { color: var(--text); }
+  .auto-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text3);
+  }
+  .auto-toggle { cursor: pointer; }
+
+  /* Table */
+  .table-wrap { flex: 1; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background .1s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  tbody td {
+    padding: 11px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .td-ticket { color: var(--text3); font-size: 11px; }
+  .td-type-buy  { color: var(--buy); font-weight: 700; }
+  .td-type-sell { color: var(--sell); font-weight: 700; }
+  .td-lots { color: var(--accent); }
+
+  .cancel-btn {
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--sell-dim);
+    color: var(--sell);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .cancel-btn:hover { background: var(--sell-bg); }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text3);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    gap: 8px;
+  }
+  .empty-icon { font-size: 32px; }
+
+  /* ── TOAST ────────────────────────────────────────────── */
+  #toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 9999;
+  }
+  .toast {
+    padding: 10px 16px;
+    border-radius: var(--r);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-left: 3px solid;
+    backdrop-filter: blur(10px);
+    animation: slideIn .2s ease;
+    max-width: 360px;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+  .toast.success { background: rgba(26,255,122,.1); border-color: var(--buy); color: var(--buy); }
+  .toast.error   { background: rgba(255,58,92,.1);  border-color: var(--sell); color: var(--sell); }
+  .toast.info    { background: rgba(90,140,255,.1); border-color: var(--accent); color: var(--accent); }
+
+  /* ── QUEUE TABLE (local) ──────────────────────────────── */
+  .local-queue { display: flex; flex-direction: column; gap: 6px; }
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .queue-type { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+  .queue-type.buy  { color: var(--buy);  background: var(--buy-bg); }
+  .queue-type.sell { color: var(--sell); background: var(--sell-bg); }
+  .queue-sym  { color: var(--text); font-weight: 700; flex: 1; }
+  .queue-price { color: var(--text2); }
+  .queue-lots  { color: var(--accent); }
+  .queue-del {
+    background: none;
+    border: none;
+    color: var(--text3);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    transition: color .15s;
+  }
+  .queue-del:hover { color: var(--sell); }
+
+  /* ── SCROLLBAR ────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* Status bar */
+  .status-bar {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 5px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text3);
+  }
+  .status-bar span { color: var(--text2); }
+
+  .divider { width: 1px; height: 14px; background: var(--border); }
+</style>
+</head>
+<body>
+
+<!-- MODAL CONFIG API -->
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:28px;width:440px;max-width:95vw">
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px">⚙ URL de la API (Railway)</div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+      Pega aquí la URL de tu API desplegada en Railway.<br>
+      Ejemplo: <span style="color:var(--accent);font-family:var(--font-mono)">https://mi-app.railway.app</span>
+    </p>
+    <input type="text" id="modal-api-url" placeholder="https://tu-app.railway.app"
+      style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:13px;border-radius:4px;outline:none;margin-bottom:16px;box-sizing:border-box"
+      onkeydown="if(event.key==='Enter')saveApiUrl()">
+    <div style="display:flex;gap:10px">
+      <button onclick="saveApiUrl()" style="flex:1;padding:10px;background:var(--accent);border:none;color:#fff;font-family:var(--font-ui);font-weight:700;font-size:13px;border-radius:4px;cursor:pointer">Guardar y conectar</button>
+      <button onclick="closeModal()" style="padding:10px 16px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-family:var(--font-ui);font-size:13px;border-radius:4px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    GES ORDER PANEL
+  </div>
+  <div class="topbar-mid"></div>
+  <div class="account-info">
+    <span id="pending-count">—</span> pendientes
+    <div class="divider"></div>
+    <span id="api-url-display" style="color:var(--text3);font-size:10px;cursor:pointer" onclick="openModal()">Sin URL</span>
+  </div>
+  <button onclick="openModal()" style="padding:5px 11px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-family:var(--font-mono);font-size:10px;border-radius:4px;cursor:pointer;margin-right:6px">⚙ API URL</button>
+  <div class="conn-badge disconnected" id="conn-badge" onclick="checkConnection()" title="Click para reconectar">
+    <div class="conn-dot"></div>
+    <span id="conn-text">Desconectado</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: FORM -->
+  <div class="form-panel">
+    <div class="panel-header">Nueva Orden</div>
+    <div class="form-body">
+
+      <!-- Tipo de orden -->
+      <div class="field">
+        <label>Tipo de Orden</label>
+        <div class="type-grid">
+          <button class="type-btn" data-type="BUY_LIMIT"  onclick="setType(this)">BUY<br>LIMIT</button>
+          <button class="type-btn" data-type="BUY_STOP"   onclick="setType(this)">BUY<br>STOP</button>
+          <button class="type-btn" data-type="SELL_LIMIT" onclick="setType(this)">SELL<br>LIMIT</button>
+          <button class="type-btn" data-type="SELL_STOP"  onclick="setType(this)">SELL<br>STOP</button>
+        </div>
+      </div>
+
+      <!-- Símbolo + Precio entrada -->
+      <div class="field-row col2">
+        <div class="field">
+          <label>Símbolo</label>
+          <input type="text" id="symbol" placeholder="EURUSD" value="EURUSD" oninput="onFormChange()" style="text-transform:uppercase">
+        </div>
+        <div class="field">
+          <label>Precio Entrada</label>
+          <input type="number" id="entry" placeholder="1.08500" step="0.00001" oninput="onFormChange()">
+        </div>
+      </div>
+
+      <!-- SL -->
+      <div class="field">
+        <label>Stop Loss</label>
+        <div class="field-row col3">
+          <div class="field" style="grid-column:1/3">
+            <input type="number" id="sl" placeholder="0" step="0.00001" oninput="onFormChange()">
+          </div>
+          <div class="field">
+            <div class="toggle-row">
+              <button class="toggle-btn active" data-mode="sl_mode" data-val="PRICE"  onclick="setMode('sl_mode','PRICE',  this)">Px</button>
+              <button class="toggle-btn"        data-mode="sl_mode" data-val="POINTS" onclick="setMode('sl_mode','POINTS', this)">Pts</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TP -->
+      <div class="field">
+        <label>Take Profit</label>
+        <div class="field-row col3">
+          <div class="field" style="grid-column:1/3">
+            <input type="number" id="tp" placeholder="0" step="0.00001" oninput="onFormChange()" id="tp">
+          </div>
+          <div class="field">
+            <div class="toggle-row">
+              <button class="toggle-btn active" data-mode="tp_mode" data-val="PRICE"  onclick="setMode('tp_mode','PRICE',  this)">Px</button>
+              <button class="toggle-btn"        data-mode="tp_mode" data-val="POINTS" onclick="setMode('tp_mode','POINTS', this)">Pts</button>
+              <button class="toggle-btn"        data-mode="tp_mode" data-val="RR"     onclick="setMode('tp_mode','RR',     this)">RR</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RR (visible solo si tp_mode=RR) -->
+      <div class="field" id="rr-field" style="display:none">
+        <label>Risk : Reward</label>
+        <input type="number" id="rr" value="2" step="0.1" min="0.1" oninput="onFormChange()" placeholder="2.0">
+      </div>
+
+      <!-- Riesgo -->
+      <div class="field">
+        <label>Riesgo / Tamaño</label>
+        <div class="field-row col3">
+          <div class="field" style="grid-column:1/3">
+            <input type="number" id="risk_value" placeholder="1" step="0.01" oninput="onFormChange()">
+          </div>
+          <div class="field">
+            <div class="toggle-row">
+              <button class="toggle-btn"        data-mode="risk_mode" data-val="PCT"  onclick="setMode('risk_mode','PCT',  this)">%</button>
+              <button class="toggle-btn"        data-mode="risk_mode" data-val="USD"  onclick="setMode('risk_mode','USD',  this)">USD</button>
+              <button class="toggle-btn active" data-mode="risk_mode" data-val="LOTS" onclick="setMode('risk_mode','LOTS', this)">Lot</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comentario -->
+      <div class="field">
+        <label>Comentario (opcional)</label>
+        <input type="text" id="comment" placeholder="Mi setup...">
+      </div>
+
+      <!-- Risk preview -->
+      <div class="risk-preview">
+        <div class="risk-item">
+          <div class="risk-label">Lotes Est.</div>
+          <div class="risk-value" id="prev-lots">—</div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-label">Riesgo USD</div>
+          <div class="risk-value warn" id="prev-risk">—</div>
+        </div>
+        <div class="risk-item">
+          <div class="risk-label">RR Ratio</div>
+          <div class="risk-value" id="prev-rr">—</div>
+        </div>
+      </div>
+
+      <!-- Botón enviar -->
+      <button class="submit-btn buy" id="submit-btn" onclick="submitOrder()">
+        ▸ ENVIAR A MT5
+      </button>
+
+    </div><!-- /form-body -->
+
+    <!-- Local queue -->
+    <div class="queue-section">
+      <div class="queue-title">
+        Cola local
+        <span class="badge" id="queue-badge">0</span>
+      </div>
+      <div class="local-queue" id="local-queue">
+        <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">Sin órdenes en cola</div>
+      </div>
+    </div>
+
+  </div><!-- /form-panel -->
+
+  <!-- RIGHT: ORDERS FROM MT5 -->
+  <div class="orders-panel">
+    <div class="orders-toolbar">
+      <div class="panel-header" style="padding:0;border:none">Órdenes Pendientes MT5</div>
+      <button class="refresh-btn" onclick="loadOrders()">↻ Actualizar</button>
+      <div class="orders-count">Total: <span id="orders-count">—</span></div>
+      <div class="auto-badge">
+        <label class="auto-toggle">
+          <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()">
+          Auto-refresh
+        </label>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="orders-table">
+        <thead>
+          <tr>
+            <th>Ticket</th>
+            <th>Símbolo</th>
+            <th>Tipo</th>
+            <th>Entrada</th>
+            <th>S/L</th>
+            <th>T/P</th>
+            <th>Lotes</th>
+            <th>Comentario</th>
+            <th>Hora</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="orders-body">
+          <tr><td colspan="10">
+            <div class="empty-state">
+              <div class="empty-icon">⏳</div>
+              Conectando con MT5...
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span id="status-time">--:--:--</span>
+  <div class="divider"></div>
+  Bridge: <span id="status-bridge">localhost:5001</span>
+  <div class="divider"></div>
+  Magic: <span>99001</span>
+  <div class="divider"></div>
+  <span id="status-msg">Iniciando...</span>
+</div>
+
+<!-- TOASTS -->
+<div id="toast-container"></div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────
+const state = {
+  type:      'BUY_LIMIT',
+  sl_mode:   'PRICE',
+  tp_mode:   'PRICE',
+  risk_mode: 'LOTS',
+  queue:     [],
+  connected: false,
+  autoInterval: null,
+};
+
+let BRIDGE_URL = localStorage.getItem('gesop_api_url') || 'https://web-production-96002.up.railway.app';
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setType(document.querySelector('[data-type="BUY_LIMIT"]'));
+  updateClock();
+  setInterval(updateClock, 1000);
+  updateApiUrlDisplay();
+  if(BRIDGE_URL) {
+    checkConnection();
+  } else {
+    openModal();
+  }
+  toggleAutoRefresh();
+});
+
+function updateClock() {
+  document.getElementById('status-time').textContent = new Date().toLocaleTimeString('es-CL');
+}
+
+// ── MODAL CONFIG ──────────────────────────────────────────────────────────
+function openModal() {
+  const el = document.getElementById('modal-overlay');
+  el.style.display = 'flex';
+  const inp = document.getElementById('modal-api-url');
+  inp.value = BRIDGE_URL || '';
+  setTimeout(() => inp.focus(), 100);
+}
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+function saveApiUrl() {
+  let url = document.getElementById('modal-api-url').value.trim();
+  if(!url) return;
+  url = url.replace(/\/$/, ''); // quitar barra final
+  BRIDGE_URL = url;
+  localStorage.setItem('gesop_api_url', url);
+  updateApiUrlDisplay();
+  closeModal();
+  checkConnection();
+  toast('URL guardada: ' + url, 'info');
+}
+function updateApiUrlDisplay() {
+  const el = document.getElementById('api-url-display');
+  if(el) el.textContent = BRIDGE_URL ? BRIDGE_URL.replace('https://','') : 'Sin URL — click para configurar';
+  const sb = document.getElementById('status-bridge');
+  if(sb) sb.textContent = BRIDGE_URL || 'no configurado';
+}
+
+// ── CONNECTION ────────────────────────────────────────────────────────────
+async function checkConnection() {
+  if(!BRIDGE_URL) { openModal(); return; }
+  try {
+    const r = await fetch(`${BRIDGE_URL}/api/status`, { signal: AbortSignal.timeout(4000) });
+    if(r.ok) {
+      state.connected = true;
+      setBadge(true);
+      loadOrders();
+    } else throw new Error('bad status');
+  } catch {
+    state.connected = false;
+    setBadge(false);
+  }
+}
+
+function setBadge(connected) {
+  const b = document.getElementById('conn-badge');
+  const t = document.getElementById('conn-text');
+  b.className = 'conn-badge ' + (connected ? 'connected' : 'disconnected');
+  t.textContent = connected ? 'MT5 Conectado' : 'Desconectado';
+  document.getElementById('status-msg').textContent = connected ? 'API conectada' : 'Sin conexión con Railway — verifica la URL';
+}
+
+// ── TYPE SELECTOR ─────────────────────────────────────────────────────────
+function setType(btn) {
+  document.querySelectorAll('.type-btn').forEach(b => {
+    b.classList.remove('active-buy','active-sell');
+  });
+  state.type = btn.dataset.type;
+  const isBuy = state.type.startsWith('BUY');
+  btn.classList.add(isBuy ? 'active-buy' : 'active-sell');
+
+  // Update submit button
+  const sb = document.getElementById('submit-btn');
+  sb.className = 'submit-btn ' + (isBuy ? 'buy' : 'sell');
+  sb.textContent = `▸ ENVIAR ${state.type.replace('_',' ')} A MT5`;
+
+  onFormChange();
+}
+
+// ── MODE TOGGLES ──────────────────────────────────────────────────────────
+function setMode(modeKey, val, btn) {
+  state[modeKey] = val;
+  // Update active button within parent toggle-row
+  const row = btn.closest('.toggle-row');
+  row.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Show/hide RR field
+  if(modeKey === 'tp_mode') {
+    document.getElementById('rr-field').style.display = val === 'RR' ? 'flex' : 'none';
+    document.getElementById('tp').closest('.field').style.display = val === 'RR' ? 'none' : 'flex';
+    // Fix - the tp input row visibility
+    const tpRow = document.getElementById('tp').closest('.field-row');
+    if(tpRow) {
+      // Only hide the number input, not the toggle
+      const tpInput = document.getElementById('tp');
+      tpInput.style.opacity = val === 'RR' ? '0.3' : '1';
+      tpInput.disabled = val === 'RR';
+    }
+  }
+
+  onFormChange();
+}
+
+// ── RISK PREVIEW ──────────────────────────────────────────────────────────
+function onFormChange() {
+  const entry     = parseFloat(document.getElementById('entry').value)     || 0;
+  const sl        = parseFloat(document.getElementById('sl').value)        || 0;
+  const tp        = parseFloat(document.getElementById('tp').value)        || 0;
+  const rr        = parseFloat(document.getElementById('rr').value)        || 2;
+  const risk_val  = parseFloat(document.getElementById('risk_value').value)|| 0;
+
+  const isBuy = state.type.startsWith('BUY');
+
+  // Estimate lots preview (simplified, no pip value lookup)
+  let lotsText = '—', riskText = '—', rrText = '—';
+
+  // RR calculation
+  if(entry > 0 && sl > 0) {
+    let sl_pts;
+    if(state.sl_mode === 'POINTS') {
+      sl_pts = sl;
+    } else {
+      sl_pts = Math.abs(entry - sl) / 0.00001; // rough for 5-digit
+      if(Math.abs(entry - sl) > 0.1) sl_pts = Math.abs(entry - sl) / 0.01; // indices
+    }
+
+    let tp_pts = 0;
+    if(state.tp_mode === 'RR') {
+      tp_pts = sl_pts * rr;
+      rrText = `1 : ${rr.toFixed(1)}`;
+    } else if(state.tp_mode === 'POINTS' && tp > 0) {
+      tp_pts = tp;
+      if(sl_pts > 0) rrText = `1 : ${(tp_pts / sl_pts).toFixed(2)}`;
+    } else if(state.tp_mode === 'PRICE' && tp > 0) {
+      tp_pts = Math.abs(entry - tp) / Math.abs(entry - sl) * sl_pts;
+      if(sl_pts > 0) rrText = `1 : ${(tp_pts / sl_pts).toFixed(2)}`;
+    }
+  } else if(state.tp_mode === 'RR') {
+    rrText = `1 : ${rr.toFixed(1)}`;
+  }
+
+  if(state.risk_mode === 'LOTS' && risk_val > 0) {
+    lotsText = risk_val.toFixed(2);
+    riskText = '~calculando';
+  } else if(risk_val > 0) {
+    lotsText = '~calculando';
+    riskText = state.risk_mode === 'PCT' ? `${risk_val}% bal.` : `$${risk_val}`;
+  }
+
+  document.getElementById('prev-lots').textContent = lotsText;
+  document.getElementById('prev-risk').textContent = riskText;
+  document.getElementById('prev-rr').textContent   = rrText;
+}
+
+// ── SUBMIT ORDER ──────────────────────────────────────────────────────────
+async function submitOrder() {
+  const symbol    = document.getElementById('symbol').value.trim().toUpperCase();
+  const entry     = parseFloat(document.getElementById('entry').value);
+  const sl        = parseFloat(document.getElementById('sl').value)       || 0;
+  const tp        = parseFloat(document.getElementById('tp').value)       || 0;
+  const rr        = parseFloat(document.getElementById('rr').value)       || 2;
+  const risk_val  = parseFloat(document.getElementById('risk_value').value)|| 1;
+  const comment   = document.getElementById('comment').value.trim() || 'GesOrder';
+
+  if(!symbol) { toast('Ingresa un símbolo', 'error'); return; }
+  if(!entry || entry <= 0) { toast('Precio de entrada inválido', 'error'); return; }
+
+  const order = {
+    symbol, entry, sl, tp, rr, comment,
+    type:       state.type,
+    sl_mode:    state.sl_mode,
+    tp_mode:    state.tp_mode,
+    risk_value: risk_val,
+    risk_mode:  state.risk_mode,
+    lots:       state.risk_mode === 'LOTS' ? risk_val : 0.01,
+  };
+
+  // Agregar a cola local siempre
+  state.queue.push({...order, id: Date.now()});
+  renderQueue();
+
+  // Enviar si conectado
+  if(state.connected) {
+    await sendOrder(order);
+  } else {
+    toast('Sin conexión — orden en cola local', 'info');
+  }
+}
+
+async function sendOrder(order) {
+  try {
+    const r = await fetch(`${BRIDGE_URL}/api/order`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(order),
+    });
+    const data = await r.json();
+    if(data.ok) {
+      toast(`✓ Orden enviada: ${order.type} ${order.symbol} @ ${order.entry}`, 'success');
+      loadOrders();
+    } else {
+      toast('Error: ' + (data.error || 'desconocido'), 'error');
+    }
+  } catch(e) {
+    state.connected = false;
+    setBadge(false);
+    toast('Error de conexión con bridge.py', 'error');
+  }
+}
+
+// ── LOCAL QUEUE ───────────────────────────────────────────────────────────
+function renderQueue() {
+  const el = document.getElementById('local-queue');
+  document.getElementById('queue-badge').textContent = state.queue.length;
+
+  if(!state.queue.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">Sin órdenes en cola</div>';
+    return;
+  }
+
+  el.innerHTML = state.queue.map(o => {
+    const isBuy = o.type.startsWith('BUY');
+    return `
+      <div class="queue-item">
+        <span class="queue-type ${isBuy?'buy':'sell'}">${o.type.replace('_',' ')}</span>
+        <span class="queue-sym">${o.symbol}</span>
+        <span class="queue-price">@ ${o.entry}</span>
+        <span class="queue-lots">${o.risk_mode==='LOTS'?o.lots+'L':o.risk_value+(o.risk_mode==='PCT'?'%':'$')}</span>
+        <button class="queue-del" onclick="removeQueue(${o.id})">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function removeQueue(id) {
+  state.queue = state.queue.filter(o => o.id !== id);
+  renderQueue();
+}
+
+// ── ORDERS TABLE ──────────────────────────────────────────────────────────
+async function loadOrders() {
+  if(!state.connected) { await checkConnection(); if(!state.connected) return; }
+  try {
+    const r = await fetch(`${BRIDGE_URL}/api/orders`);
+    const orders = await r.json();
+    renderOrders(orders);
+    document.getElementById('pending-count').textContent = orders.length;
+    document.getElementById('orders-count').textContent  = orders.length;
+  } catch {
+    state.connected = false;
+    setBadge(false);
+  }
+}
+
+function renderOrders(orders) {
+  const tbody = document.getElementById('orders-body');
+  if(!orders.length) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📋</div>No hay órdenes pendientes con magic 99001</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = orders.map(o => {
+    const isBuy = o.type.toUpperCase().includes('BUY');
+    const tp_display = o.tp === '0.00000' || o.tp === '0' || !o.tp ? '—' : o.tp;
+    const sl_display = o.sl === '0.00000' || o.sl === '0' || !o.sl ? '—' : o.sl;
+    return `<tr>
+      <td class="td-ticket">#${o.ticket}</td>
+      <td><strong>${o.symbol}</strong></td>
+      <td class="${isBuy?'td-type-buy':'td-type-sell'}">${o.type}</td>
+      <td>${o.entry}</td>
+      <td>${sl_display}</td>
+      <td>${tp_display}</td>
+      <td class="td-lots">${o.lots}</td>
+      <td style="color:var(--text2)">${o.comment||'—'}</td>
+      <td style="color:var(--text3)">${o.time||'—'}</td>
+      <td><button class="cancel-btn" onclick="cancelOrder('${o.ticket}','${o.symbol}')">✕ Cancel</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function cancelOrder(ticket, symbol) {
+  if(!confirm(`¿Cancelar orden #${ticket} (${symbol})?`)) return;
+  try {
+    const r = await fetch(`${BRIDGE_URL}/api/orders/cancel`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ticket}),
+    });
+    const data = await r.json();
+    if(data.ok) {
+      toast(`✓ Orden #${ticket} cancelada`, 'success');
+      setTimeout(loadOrders, 1200);
+    }
+  } catch { toast('Error cancelando orden', 'error'); }
+}
+
+// ── AUTO REFRESH ──────────────────────────────────────────────────────────
+function toggleAutoRefresh() {
+  clearInterval(state.autoInterval);
+  if(document.getElementById('auto-refresh').checked) {
+    state.autoInterval = setInterval(() => { loadOrders(); checkConnection(); }, 5000);
+  }
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+function toast(msg, type='info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+</script>
+</body>
+</html>
