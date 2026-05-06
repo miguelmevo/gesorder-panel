@@ -132,6 +132,11 @@ def pending_raw():
     if not orders:
         return Response("# no_orders\n", mimetype="text/plain")
 
+    # Marcar inmediatamente como "processing" para evitar duplicados
+    for o in orders:
+        o["status"] = "processing"
+        o["fetched_at"] = now_str()
+
     lines = [order_to_pipe(o) for o in orders]
     return Response("\n".join(lines) + "\n", mimetype="text/plain")
 
@@ -155,6 +160,24 @@ def ack_order():
             break
 
     return jsonify({"ok": True})
+
+@app.route("/api/orders/recover", methods=["POST"])
+def recover_stuck():
+    """Devuelve a 'pending' órdenes en 'processing' por más de 15 segundos (por si el EA crasheó)."""
+    from datetime import datetime, timedelta
+    recovered = 0
+    for o in pending_orders:
+        if o["status"] == "processing":
+            fetched = o.get("fetched_at", "")
+            try:
+                t = datetime.strptime(fetched, "%Y-%m-%d %H:%M:%S")
+                if datetime.utcnow() - t > timedelta(seconds=15):
+                    o["status"] = "pending"
+                    recovered += 1
+            except:
+                o["status"] = "pending"
+                recovered += 1
+    return jsonify({"ok": True, "recovered": recovered})
 
 @app.route("/api/orders/active", methods=["POST"])
 def update_active():
