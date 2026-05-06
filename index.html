@@ -539,13 +539,42 @@
 
       <!-- Símbolo + Precio entrada -->
       <div class="field-row col2">
-        <div class="field">
+        <div class="field" style="position:relative">
           <label>Símbolo</label>
-          <input type="text" id="symbol" placeholder="EURUSD" value="EURUSD" oninput="onFormChange()" style="text-transform:uppercase">
+          <input type="text" id="symbol" placeholder="EURUSD" value="EURUSD"
+            autocomplete="off"
+            oninput="this.value=this.value.toUpperCase();filterSymbols(this.value);onFormChange()"
+            onfocus="showSymbolDropdown()"
+            onblur="setTimeout(hideSymbolDropdown,200)"
+            style="text-transform:uppercase">
+          <div id="symbol-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;max-height:180px;overflow-y:auto;z-index:999;margin-top:2px"></div>
         </div>
         <div class="field">
           <label>Precio Entrada</label>
           <input type="number" id="entry" placeholder="1.08500" step="0.00001" oninput="onFormChange()">
+        </div>
+      </div>
+
+      <!-- Aviso de validación -->
+      <div id="validation-msg" style="display:none;padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;border-left:3px solid var(--warn);background:rgba(255,170,26,0.08);color:var(--warn)"></div>
+
+      <!-- Extracción desde imagen IA -->
+      <div style="border:1px dashed var(--border2);border-radius:4px;padding:12px;background:var(--bg)">
+        <div style="font-size:10px;font-family:var(--font-mono);color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
+          ✦ Leer precios desde imagen
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label for="img-upload" style="flex:1;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--text2);text-align:center;transition:border-color .15s" 
+            onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+            📎 Subir captura
+          </label>
+          <input type="file" id="img-upload" accept="image/*" style="display:none" onchange="extractFromImage(this)">
+          <button onclick="document.getElementById('img-upload').click()" 
+            style="display:none" id="img-btn-hidden"></button>
+        </div>
+        <div id="img-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:8px;display:none"></div>
+        <div id="img-preview" style="margin-top:8px;display:none">
+          <img id="img-thumb" style="max-width:100%;max-height:80px;border-radius:4px;border:1px solid var(--border);object-fit:cover">
         </div>
       </div>
 
@@ -690,7 +719,176 @@
 <div id="toast-container"></div>
 
 <script>
-// ── STATE ─────────────────────────────────────────────────────────────────
+// ── EXTRACCIÓN IA DESDE IMAGEN ────────────────────────────────────────────
+async function extractFromImage(input) {
+  const file = input.files[0];
+  if(!file) return;
+
+  const status  = document.getElementById('img-status');
+  const preview = document.getElementById('img-preview');
+  const thumb   = document.getElementById('img-thumb');
+
+  const reader  = new FileReader();
+  reader.onload = async (e) => {
+    const dataUrl   = e.target.result;
+    const base64    = dataUrl.split(',')[1];
+    const mediaType = file.type || 'image/png';
+
+    thumb.src             = dataUrl;
+    preview.style.display = 'block';
+    status.style.display  = 'block';
+    status.style.color    = 'var(--accent)';
+    status.textContent    = '⏳ Analizando imagen con IA...';
+
+    if(!BRIDGE_URL) { status.style.color='var(--sell)'; status.textContent='✗ Configura la URL de Railway primero'; return; }
+
+    try {
+      const r = await fetch(`${BRIDGE_URL}/api/extract-image`, {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({ image: base64, media_type: mediaType })
+      });
+      const data = await r.json();
+
+      if(!data.ok) {
+        status.style.color = 'var(--sell)';
+        status.textContent = '✗ ' + (data.error || 'Error desconocido');
+        return;
+      }
+
+      const values = data.values;
+      let filled   = 0;
+
+      if(values.entry != null) { document.getElementById('entry').value = values.entry; filled++; }
+      if(values.sl    != null) {
+        document.getElementById('sl').value = values.sl;
+        setMode('sl_mode', 'PRICE', document.querySelector('[data-mode="sl_mode"][data-val="PRICE"]'));
+        filled++;
+      }
+      if(values.tp    != null) {
+        document.getElementById('tp').value = values.tp;
+        setMode('tp_mode', 'PRICE', document.querySelector('[data-mode="tp_mode"][data-val="PRICE"]'));
+        filled++;
+      }
+
+      onFormChange();
+      status.style.color = filled > 0 ? 'var(--buy)' : 'var(--warn)';
+      status.textContent = filled > 0
+        ? `✓ Detectado — Entrada: ${values.entry ?? '—'} | SL: ${values.sl ?? '—'} | TP: ${values.tp ?? '—'}`
+        : '⚠ No se detectaron precios en la imagen';
+
+    } catch(err) {
+      status.style.color = 'var(--sell)';
+      status.textContent = '✗ Error: ' + err.message;
+    }
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+const DEFAULT_SYMBOLS = [
+  'EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','NZDUSD','USDCAD',
+  'EURGBP','EURJPY','GBPJPY','AUDJPY','CADJPY','CHFJPY','GBPCHF',
+  'XAUUSD','XAGUSD','US30','US500','NAS100','GER40','UK100',
+  'BTCUSD','ETHUSD','EURUSD+','GBPUSD+','GBPJPY+','USDJPY+','XAUUSD+'
+];
+
+function getAllSymbols() {
+  const saved = JSON.parse(localStorage.getItem('gesop_symbols') || '[]');
+  return [...new Set([...saved, ...DEFAULT_SYMBOLS])];
+}
+
+function loadSymbols() {} // kept for compatibility
+
+function renderDropdown(symbols) {
+  const dd = document.getElementById('symbol-dropdown');
+  if(!dd) return;
+  dd.innerHTML = symbols.map(s =>
+    `<div onclick="selectSymbol('${s}')"
+      style="padding:7px 12px;font-family:var(--font-mono);font-size:12px;cursor:pointer;color:var(--text)"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">` + s + `</div>`
+  ).join('');
+}
+
+function showSymbolDropdown() {
+  const val = document.getElementById('symbol').value.toUpperCase();
+  filterSymbols(val);
+  document.getElementById('symbol-dropdown').style.display = 'block';
+}
+
+function hideSymbolDropdown() {
+  const dd = document.getElementById('symbol-dropdown');
+  if(dd) dd.style.display = 'none';
+}
+
+function filterSymbols(val) {
+  const all      = getAllSymbols();
+  const filtered = val ? all.filter(s => s.includes(val)) : all;
+  renderDropdown(filtered.slice(0, 20));
+}
+
+function selectSymbol(sym) {
+  document.getElementById('symbol').value = sym;
+  hideSymbolDropdown();
+  onFormChange();
+}
+
+function saveSymbol(symbol) {
+  if(!symbol) return;
+  const saved = JSON.parse(localStorage.getItem('gesop_symbols') || '[]');
+  if(!saved.includes(symbol)) {
+    saved.unshift(symbol);
+    localStorage.setItem('gesop_symbols', JSON.stringify(saved.slice(0, 50)));
+  }
+}
+
+// ── VALIDACIÓN DE PRECIOS ─────────────────────────────────────────────────
+function validateOrder(order) {
+  const errors = [];
+  const { type, entry, sl, sl_mode, tp, tp_mode, rr, risk_value, risk_mode } = order;
+  const isBuy  = type.startsWith('BUY');
+  const isStop = type.endsWith('STOP');
+  const isLimit= type.endsWith('LIMIT');
+
+  // SL en precio: validar dirección
+  if(sl_mode === 'PRICE' && sl > 0) {
+    if(isBuy  && sl >= entry) errors.push(`SL (${sl}) debe ser MENOR que la entrada (${entry}) en órdenes BUY`);
+    if(!isBuy && sl <= entry) errors.push(`SL (${sl}) debe ser MAYOR que la entrada (${entry}) en órdenes SELL`);
+  }
+
+  // TP en precio: validar dirección
+  if(tp_mode === 'PRICE' && tp > 0) {
+    if(isBuy  && tp <= entry) errors.push(`TP (${tp}) debe ser MAYOR que la entrada (${entry}) en órdenes BUY`);
+    if(!isBuy && tp >= entry) errors.push(`TP (${tp}) debe ser MENOR que la entrada (${entry}) en órdenes SELL`);
+  }
+
+  // SL no puede ser igual al TP
+  if(sl_mode === 'PRICE' && tp_mode === 'PRICE' && sl > 0 && tp > 0 && sl === tp)
+    errors.push('SL y TP no pueden ser iguales');
+
+  // Riesgo mínimo
+  if(risk_mode === 'LOTS' && risk_value <= 0)  errors.push('El tamaño de lotes debe ser mayor a 0');
+  if(risk_mode === 'PCT'  && risk_value <= 0)  errors.push('El % de riesgo debe ser mayor a 0');
+  if(risk_mode === 'USD'  && risk_value <= 0)  errors.push('El riesgo en USD debe ser mayor a 0');
+  if(risk_mode === 'PCT'  && risk_value > 20)  errors.push(`⚠ Riesgo alto: ${risk_value}% del balance`);
+
+  // Entrada debe ser positiva
+  if(!entry || entry <= 0) errors.push('El precio de entrada no puede ser 0');
+
+  return errors;
+}
+
+function showValidation(errors) {
+  const el = document.getElementById('validation-msg');
+  if(!errors.length) { el.style.display = 'none'; return true; }
+  el.style.display = 'block';
+  el.innerHTML     = errors.map(e => `⚠ ${e}`).join('<br>');
+  return false;
+}
+
+function clearValidation() {
+  const el = document.getElementById('validation-msg');
+  if(el) el.style.display = 'none';
+}
 const state = {
   type:      'BUY_LIMIT',
   sl_mode:   'PRICE',
@@ -706,6 +904,7 @@ let BRIDGE_URL = localStorage.getItem('gesop_api_url') || 'https://web-productio
 // ── INIT ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   setType(document.querySelector('[data-type="BUY_LIMIT"]'));
+  loadSymbols();
   updateClock();
   setInterval(updateClock, 1000);
   updateApiUrlDisplay();
@@ -891,6 +1090,14 @@ async function submitOrder() {
     lots:       state.risk_mode === 'LOTS' ? risk_val : 0.01,
   };
 
+  // Validar precios antes de enviar
+  const errors = validateOrder(order);
+  const hasBlockingError = errors.some(e => !e.startsWith('⚠ Riesgo'));
+  if(!showValidation(errors) && hasBlockingError) {
+    toast('Corrige los errores antes de enviar', 'error');
+    return;
+  }
+
   // Solo agregar a cola local si NO hay conexión
   if(state.connected) {
     await sendOrder(order);
@@ -910,6 +1117,8 @@ async function sendOrder(order) {
     const data = await r.json();
     if(data.ok) {
       toast(`✓ Orden enviada: ${order.type} ${order.symbol} @ ${order.entry}`, 'success');
+      saveSymbol(order.symbol);
+      clearValidation();
       loadOrders();
     } else {
       // Falló el envío — guardar en cola local

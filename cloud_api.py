@@ -27,6 +27,7 @@ CORS(app)
 pending_orders = []   # Órdenes pendientes de ejecución por MT5
 active_orders  = []   # Órdenes activas reportadas por MT5
 ea_last_seen   = None # Última vez que el EA hizo ping
+active_version = 0    # Incrementa cada vez que cambian las órdenes activas
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 def now_str():
@@ -182,7 +183,7 @@ def recover_stuck():
 @app.route("/api/orders/active", methods=["POST"])
 def update_active():
     """MT5 EA reporta sus órdenes pendientes activas (reemplaza todo)."""
-    global active_orders, ea_last_seen
+    global active_orders, ea_last_seen, active_version
     ea_last_seen = now_str()
     
     try:
@@ -196,11 +197,12 @@ def update_active():
             import json as json_lib
             data = json_lib.loads(raw_fixed)
         active_orders = data if isinstance(data, list) else []
+        active_version += 1
     except Exception as e:
         print(f"[{now_str()}] Error parseando active orders: {e} | raw: {request.get_data(as_text=True)[:200]}")
         return jsonify({"ok": False, "error": str(e)}), 400
     
-    return jsonify({"ok": True, "count": len(active_orders)})
+    return jsonify({"ok": True, "count": len(active_orders), "version": active_version})
 
 @app.route("/api/orders/active", methods=["GET"])
 @app.route("/api/orders", methods=["GET"])  # alias para compatibilidad web panel
@@ -252,8 +254,84 @@ def ping():
     return jsonify({"ok": True, "time": ea_last_seen})
 
 
+# ── EXTRACCIÓN IA DESDE IMAGEN ────────────────────────────────────────────
+@app.route("/api/extract-image", methods=["POST"])
+def extract_image():
+    """
+    Proxy para llamar a la API de Anthropic desde el servidor.
+    Requiere variable de entorno ANTHROPIC_API_KEY en Railway.
+    """
+    import requests as req
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return jsonify({
+            "ok": False,
+            "error": "ANTHROPIC_API_KEY no configurada en Railway. Ve a tu proyecto → Variables → agrega ANTHROPIC_API_KEY"
+        }), 500
+
+    data       = request.get_json(force=True) or {}
+    image_b64  = data.get("image")
+    media_type = data.get("media_type", "image/png")
+
+    if not image_b64:
+        return jsonify({"ok": False, "error": "Sin imagen"}), 400
+
+    prompt = """Analiza esta imagen de trading y extrae exactamente estos 3 valores numéricos:
+
+1. PRECIO DE ENTRADA: busca "Precio de entrada", "Entry", "Entrada", "Open", "Price"
+2. STOP LOSS: busca sección "NIVEL DE STOP" o "Stop Loss" o "SL" — usa el valor de "Precio" (NO Ticks)
+3. TAKE PROFIT: busca sección "NIVEL DE BENEFICIO" o "Take Profit" o "TP" — usa el valor de "Precio" (NO Ticks)
+
+Si hay "Ticks" y "Precio" en la misma sección, usa siempre "Precio".
+
+Responde ÚNICAMENTE con JSON, sin texto adicional:
+{"entry": 211.514, "sl": 211.213, "tp": 211.716}
+
+Si no encuentras algún valor usa null. Solo números."""
+
+    try:
+        resp = req.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      "claude-opus-4-5",
+                "max_tokens": 300,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image_b64}},
+                        {"type": "text",  "text": prompt}
+                    ]
+                }]
+            },
+            timeout=20
+        )
+        result = resp.json()
+        text   = ""
+        for block in result.get("content", []):
+            if block.get("type") == "text":
+                text += block.get("text", "")
+
+        import re, json as json_lib
+        match = re.search(r'\{[^}]+\}', text)
+        if not match:
+            return jsonify({"ok": False, "error": f"No se pudo parsear: {text[:100]}"}), 500
+
+        values = json_lib.loads(match.group())
+        return jsonify({"ok": True, "values": values})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ── INICIO ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"GesOrderPanel Cloud API — puerto {port}")
     app.run(host="0.0.0.0", port=port)
+
