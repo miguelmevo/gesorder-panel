@@ -188,6 +188,7 @@ def update_active():
     return jsonify({"ok": True, "count": len(active_orders)})
 
 @app.route("/api/orders/active", methods=["GET"])
+@app.route("/api/orders", methods=["GET"])  # alias para compatibilidad web panel
 def get_active():
     """Web app lee las órdenes activas en MT5."""
     return jsonify(active_orders)
