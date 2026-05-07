@@ -299,7 +299,7 @@ Si no encuentras algún valor usa null. Solo números."""
                 "content-type":      "application/json",
             },
             json={
-                "model":      "claude-sonnet-4-20250514",
+                "model":      "claude-3-5-sonnet-20241022",
                 "max_tokens": 300,
                 "messages": [{
                     "role": "user",
