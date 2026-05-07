@@ -299,7 +299,7 @@ Si no encuentras algún valor usa null. Solo números."""
                 "content-type":      "application/json",
             },
             json={
-                "model":      "claude-opus-4-5",
+                "model":      "claude-sonnet-4-20250514",
                 "max_tokens": 300,
                 "messages": [{
                     "role": "user",
@@ -312,12 +312,22 @@ Si no encuentras algún valor usa null. Solo números."""
             timeout=20
         )
         result = resp.json()
-        text   = ""
+        print(f"[extract] HTTP {resp.status_code} keys:{list(result.keys())}")
+
+        # Detectar error de Anthropic
+        if result.get("type") == "error" or "error" in result:
+            err = result.get("error", {})
+            msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+            return jsonify({"ok": False, "error": f"Anthropic: {msg}"}), 500
+
+        text = ""
         for block in result.get("content", []):
             if block.get("type") == "text":
                 text += block.get("text", "")
 
-        print(f"[extract] Respuesta IA: {text[:200]}")
+        print(f"[extract] Texto: '{text[:300]}'")
+        if not text.strip():
+            return jsonify({"ok": False, "error": f"Respuesta vacía: {str(result)[:200]}"}), 500
 
         import re, json as json_lib
 
