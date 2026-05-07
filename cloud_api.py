@@ -317,12 +317,34 @@ Si no encuentras algún valor usa null. Solo números."""
             if block.get("type") == "text":
                 text += block.get("text", "")
 
-        import re, json as json_lib
-        match = re.search(r'\{[^}]+\}', text)
-        if not match:
-            return jsonify({"ok": False, "error": f"No se pudo parsear: {text[:100]}"}), 500
+        print(f"[extract] Respuesta IA: {text[:200]}")
 
-        values = json_lib.loads(match.group())
+        import re, json as json_lib
+
+        # Intentar parsear JSON directo
+        try:
+            values = json_lib.loads(text.strip())
+        except:
+            # Buscar JSON dentro del texto con regex más flexible
+            match = re.search(r'\{.*?\}', text, re.DOTALL)
+            if not match:
+                # Extraer números manualmente como fallback
+                nums = re.findall(r'[\d]+\.[\d]+', text)
+                print(f"[extract] Fallback nums: {nums}")
+                if len(nums) >= 1:
+                    values = {
+                        "entry": float(nums[0]) if len(nums) > 0 else None,
+                        "sl":    float(nums[2]) if len(nums) > 2 else None,
+                        "tp":    float(nums[1]) if len(nums) > 1 else None,
+                    }
+                else:
+                    return jsonify({"ok": False, "error": f"No se pudo parsear: {text[:150]}"}), 500
+            else:
+                try:
+                    values = json_lib.loads(match.group())
+                except Exception as je:
+                    return jsonify({"ok": False, "error": f"JSON inválido: {match.group()[:100]}"}), 500
+
         return jsonify({"ok": True, "values": values})
 
     except Exception as e:
