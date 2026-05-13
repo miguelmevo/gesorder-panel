@@ -6,6 +6,7 @@
 <title>GesOrder Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
 <style>
   :root {
     --bg:        #0d0d15;
@@ -477,6 +478,25 @@
   .status-bar span { color: var(--text2); }
 
   .divider { width: 1px; height: 14px; background: var(--border); }
+
+  /* ── RESPONSIVE ──────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: auto auto; min-height: unset; }
+    .form-panel { border-right: none; border-bottom: 1px solid var(--border); }
+    .orders-panel { height: 55vh; min-height: 280px; }
+    .topbar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
+    .orders-toolbar { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  }
+
+  @media (max-width: 540px) {
+    .field-row.col2 { grid-template-columns: 1fr; }
+    .type-grid { grid-template-columns: repeat(2,1fr); }
+    .orders-panel { height: 50vh; }
+    thead th { font-size: 9px; padding: 6px 8px; }
+    tbody td { font-size: 11px; padding: 6px 8px; }
+    .account-info { display: none; }
+    .logo { font-size: 13px; }
+  }
 </style>
 </head>
 <body>
@@ -558,24 +578,20 @@
       <!-- Aviso de validación -->
       <div id="validation-msg" style="display:none;padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;border-left:3px solid var(--warn);background:rgba(255,170,26,0.08);color:var(--warn)"></div>
 
-      <!-- Extracción desde imagen IA -->
+      <!-- Extracción desde imagen OCR (individual o tabla) -->
       <div style="border:1px dashed var(--border2);border-radius:4px;padding:12px;background:var(--bg)">
         <div style="font-size:10px;font-family:var(--font-mono);color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
-          ✦ Leer precios desde imagen
+          ✦ Leer desde imagen — precio único o tabla de órdenes
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <label for="img-upload" style="flex:1;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--text2);text-align:center;transition:border-color .15s" 
+          <label for="img-upload" style="flex:1;padding:8px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--text2);text-align:center;transition:border-color .15s"
             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
-            📎 Subir captura
+            📎 Subir imagen o Ctrl+V para pegar
           </label>
           <input type="file" id="img-upload" accept="image/*" style="display:none" onchange="extractFromImage(this)">
-          <button onclick="document.getElementById('img-upload').click()" 
-            style="display:none" id="img-btn-hidden"></button>
+          <button id="img-clear-btn" onclick="clearOcrResult()" style="display:none;padding:8px 12px;background:transparent;border:1px solid var(--border2);border-radius:4px;color:var(--text3);font-family:var(--font-mono);font-size:11px;cursor:pointer">✕ Limpiar</button>
         </div>
-        <div id="img-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:8px;display:none"></div>
-        <div id="img-preview" style="margin-top:8px;display:none">
-          <img id="img-thumb" style="max-width:100%;max-height:80px;border-radius:4px;border:1px solid var(--border);object-fit:cover">
-        </div>
+        <div id="img-status" style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-top:8px;display:none;line-height:1.5"></div>
       </div>
 
       <!-- SL -->
@@ -704,6 +720,43 @@
 
 </div><!-- /main -->
 
+<!-- POSITIONS PANEL -->
+<div id="positions-panel" style="background:var(--bg2);border-top:2px solid var(--border2)">
+  <div style="padding:10px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)">
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;display:flex;align-items:center;gap:8px">
+      <span style="width:3px;height:14px;background:var(--warn);border-radius:2px;display:inline-block"></span>
+      Posiciones Abiertas
+    </div>
+    <span id="pos-count" style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">Total: <span style="color:var(--text)">—</span></span>
+    <span id="pos-total-pl" style="font-family:var(--font-mono);font-size:12px;font-weight:700;margin-left:8px"></span>
+    <div style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text3)" id="pos-updated">—</div>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px">
+      <thead>
+        <tr style="background:var(--bg)">
+          <th style="padding:8px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap">Ticket</th>
+          <th style="padding:8px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Símbolo</th>
+          <th style="padding:8px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Tipo</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Lotes</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Entrada</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Actual</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">S/L</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">T/P</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">P&L</th>
+          <th style="padding:8px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Swap</th>
+          <th style="padding:8px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Hora</th>
+        </tr>
+      </thead>
+      <tbody id="positions-body">
+        <tr><td colspan="11">
+          <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Sin posiciones abiertas</div>
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- STATUS BAR -->
 <div class="status-bar">
   <span id="status-time">--:--:--</span>
@@ -719,71 +772,309 @@
 <div id="toast-container"></div>
 
 <script>
-// ── EXTRACCIÓN IA DESDE IMAGEN ────────────────────────────────────────────
+// ── EXTRACCIÓN OCR DESDE IMAGEN (Tesseract.js — sin API key) ─────────────
+// Pegar imagen con Ctrl+V / Cmd+V
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData?.items;
+  if(!items) return;
+  for(const item of items) {
+    if(item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if(file) processImageFile(file);
+      break;
+    }
+  }
+});
+
+async function processImageFile(file) {
+  const status = document.getElementById('img-status');
+  status.style.display = 'block';
+  status.style.color   = 'var(--accent)';
+  status.textContent   = '⏳ Leyendo imagen... 0%';
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const result = await Tesseract.recognize(e.target.result, 'spa+eng', {
+        logger: m => {
+          if(m.status === 'recognizing text')
+            status.textContent = `⏳ Leyendo imagen... ${Math.round(m.progress*100)}%`;
+        }
+      });
+      applyOcrValues(result.data.text);
+    } catch(err) {
+      status.style.color = 'var(--sell)';
+      status.textContent = '✗ Error OCR: ' + (err.message || err);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyOcrValues(text) {
+  const status = document.getElementById('img-status');
+  status.style.display = 'block';
+
+  // Mostrar texto crudo para diagnóstico
+  console.log('[OCR RAW]\n' + text);
+  const debugLines = text.split('\n').filter(l => l.trim()).slice(0, 30).join(' | ');
+  status.style.color = 'var(--text3)';
+  status.textContent = '🔍 OCR: ' + debugLines.substring(0, 200);
+
+  // Intentar detectar tabla de órdenes
+  const batchOrders = parseTradeTable(text);
+  if(batchOrders.length > 0) {
+    showBatchPanel(batchOrders);
+    status.style.color = 'var(--buy)';
+    status.textContent = `✓ Tabla detectada — ${batchOrders.length} órdenes encontradas.`;
+    const btn = document.getElementById('img-clear-btn');
+    if(btn) btn.style.display = 'block';
+    return;
+  }
+
+  // Intentar valores individuales
+  const values = parseTradeValues(text);
+  let filled = 0;
+  if(values.entry != null) { document.getElementById('entry').value = values.entry; filled++; }
+  if(values.sl    != null) { document.getElementById('sl').value    = values.sl;    filled++;
+    setMode('sl_mode','PRICE', document.querySelector('[data-mode="sl_mode"][data-val="PRICE"]')); }
+  if(values.tp    != null) { document.getElementById('tp').value    = values.tp;    filled++;
+    setMode('tp_mode','PRICE', document.querySelector('[data-mode="tp_mode"][data-val="PRICE"]')); }
+  onFormChange();
+
+  const btn = document.getElementById('img-clear-btn');
+  if(btn) btn.style.display = 'block';
+
+  if(filled > 0) {
+    status.style.color = 'var(--buy)';
+    status.textContent = `✓ Entrada: ${values.entry??'—'} | SL: ${values.sl??'—'} | TP: ${values.tp??'—'}`;
+  } else {
+    status.style.color = 'var(--warn)';
+    status.textContent = '⚠ No detectado. Texto OCR (consola F12): ' + debugLines.substring(0, 100);
+  }
+}
+
+// ── TABLA DE ÓRDENES ──────────────────────────────────────────────────────
+function parseTradeTable(text) {
+  const orders = [];
+  const lines  = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  for(const line of lines) {
+    // Línea con precio decimal + dos enteros (ej: "212.894 180 179")
+    const m = line.match(/^(\d{2,6}[.,]\d{1,5})\s+(\d{1,5})\s+(\d{1,5})\s*$/);
+    if(m) {
+      orders.push({
+        type:  'BUY_STOP',
+        entry: parseFloat(m[1].replace(',', '.')),
+        sl:    parseInt(m[2]),
+        tp:    parseInt(m[3]),
+      });
+    }
+  }
+
+  if(orders.length < 2) return orders;
+
+  // Heurística robusta: buscar el punto de quiebre donde los precios
+  // pasan de zona alta (BUY) a zona baja (SELL).
+  // En lugar del máximo puntual (frágil ante errores OCR), usamos
+  // la mediana como divisor: precios >= mediana → BUY, < mediana → SELL.
+  const prices = orders.map(o => o.entry).slice().sort((a,b) => a - b);
+  const mid    = prices.length % 2 === 0
+    ? (prices[prices.length/2 - 1] + prices[prices.length/2]) / 2
+    : prices[Math.floor(prices.length/2)];
+
+  // Asignar tipo por lado de la mediana
+  for(const o of orders) {
+    o.type = o.entry >= mid ? 'BUY_STOP' : 'SELL_STOP';
+  }
+
+  // Verificar consistencia: si hay un bloque inicial de BUY seguido de SELL,
+  // respetar esa estructura (el orden de la tabla suele ser BUY arriba, SELL abajo)
+  // En caso de mezcla, mantener la asignación por mediana.
+  return orders;
+}
+
+// Estado de batch
+let batchOrders = [];
+
+function showBatchPanel(orders) {
+  batchOrders = orders;
+  const symbol  = document.getElementById('symbol').value || '—';
+  const tbody   = document.getElementById('batch-tbody');
+  const panel   = document.getElementById('batch-panel');
+  const bsym    = document.getElementById('batch-symbol');
+  if(bsym) bsym.textContent = symbol;
+
+  tbody.innerHTML = orders.map((o, i) => {
+    const isBuy = o.type.startsWith('BUY');
+    return `<tr id="batch-row-${i}" onclick="toggleBatchRow(${i})" style="border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
+      <td style="padding:10px 12px;text-align:center" onclick="event.stopPropagation();toggleBatchRow(${i})">
+        <div id="batch-cb-${i}" data-checked="true"
+          style="width:18px;height:18px;border:2px solid var(--accent);border-radius:3px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s">
+          <span style="color:#fff;font-size:12px;line-height:1">✓</span>
+        </div>
+      </td>
+      <td style="padding:10px 12px" onclick="event.stopPropagation()">
+        <button id="batch-type-${i}" onclick="toggleBatchType(${i})"
+          style="padding:4px 10px;border:1px solid ${isBuy?'var(--buy)':'var(--sell)'};background:${isBuy?'var(--buy-bg)':'var(--sell-bg)'};color:${isBuy?'var(--buy)':'var(--sell)'};font-family:var(--font-mono);font-size:10px;font-weight:700;border-radius:3px;cursor:pointer;min-width:80px">
+          ${o.type.replace('_',' ')}
+        </button>
+      </td>
+      <td style="padding:10px 16px;text-align:right;color:var(--text);font-weight:600">${o.entry}</td>
+      <td style="padding:10px 16px;text-align:right;color:var(--text2)">${o.sl}</td>
+      <td style="padding:10px 16px;text-align:right;color:var(--text2)">${o.tp}</td>
+    </tr>`;
+  }).join('');
+
+  panel.style.display = 'flex';
+}
+
+function toggleBatchType(i) {
+  const o   = batchOrders[i];
+  o.type    = o.type === 'BUY_STOP' ? 'SELL_STOP' : 'BUY_STOP';
+  const btn = document.getElementById(`batch-type-${i}`);
+  const isBuy = o.type.startsWith('BUY');
+  btn.textContent   = o.type.replace('_',' ');
+  btn.style.borderColor = isBuy ? 'var(--buy)' : 'var(--sell)';
+  btn.style.background  = isBuy ? 'var(--buy-bg)' : 'var(--sell-bg)';
+  btn.style.color       = isBuy ? 'var(--buy)' : 'var(--sell)';
+}
+
+function toggleBatchRow(i) {
+  const cb = document.getElementById(`batch-cb-${i}`);
+  if(!cb) return;
+  const checked = cb.dataset.checked === 'true';
+  setBatchCb(cb, !checked);
+}
+
+function setBatchCb(cb, checked) {
+  cb.dataset.checked = checked ? 'true' : 'false';
+  cb.style.background     = checked ? 'var(--accent)' : 'transparent';
+  cb.style.borderColor    = checked ? 'var(--accent)' : 'var(--border2)';
+  cb.querySelector('span').style.display = checked ? 'inline' : 'none';
+}
+
+function selectAllBatch(checked) {
+  batchOrders.forEach((_, i) => {
+    const cb = document.getElementById(`batch-cb-${i}`);
+    if(cb) setBatchCb(cb, checked);
+  });
+}
+
+async function sendBatchOrders() {
+  const symbol   = document.getElementById('symbol').value.trim().toUpperCase();
+  const riskVal  = parseFloat(document.getElementById('risk_value').value) || 1;
+  const riskMode = state.risk_mode;
+  const btn      = document.getElementById('batch-send-btn');
+
+  if(!symbol) { toast('Ingresa el símbolo primero', 'error'); return; }
+  if(!state.connected) { toast('Sin conexión con la API', 'error'); return; }
+
+  const selected = batchOrders.filter((_, i) => {
+    const cb = document.getElementById(`batch-cb-${i}`);
+    return cb && cb.dataset.checked === 'true';
+  });
+
+  if(!selected.length) { toast('Selecciona al menos una orden', 'error'); return; }
+
+  btn.disabled    = true;
+  btn.textContent = `⏳ Enviando 0/${selected.length}...`;
+
+  let sent = 0, errors = 0;
+  for(const o of selected) {
+    const order = {
+      symbol,
+      type:       o.type,
+      entry:      o.entry,
+      sl:         o.sl,
+      sl_mode:    'POINTS',
+      tp:         o.tp,
+      tp_mode:    'POINTS',
+      lots:       riskMode === 'LOTS' ? riskVal : 0.01,
+      risk_value: riskVal,
+      risk_mode:  riskMode,
+      rr:         2,
+      comment:    'GesOP-Batch',
+    };
+    try {
+      const r = await fetch(`${BRIDGE_URL}/api/order`, {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify(order),
+      });
+      const d = await r.json();
+      if(d.ok) { sent++; saveSymbol(symbol); }
+      else errors++;
+    } catch { errors++; }
+    btn.textContent = `⏳ Enviando ${sent}/${selected.length}...`;
+  }
+
+  btn.disabled    = false;
+  btn.textContent = '▸ Enviar seleccionadas';
+
+  if(sent > 0)    toast(`✓ ${sent} orden${sent>1?'es':''} enviada${sent>1?'s':''}`, 'success');
+  if(errors > 0)  toast(`✗ ${errors} error${errors>1?'es':''}`, 'error');
+  clearOcrResult();
+  setTimeout(loadOrders, 1500);
+}
+
+function clearOcrResult() {
+  const status = document.getElementById('img-status');
+  const btn    = document.getElementById('img-clear-btn');
+  const panel  = document.getElementById('batch-panel');
+  if(status) { status.style.display = 'none'; status.textContent = ''; }
+  if(btn)    btn.style.display = 'none';
+  if(panel)  panel.style.display = 'none';
+  batchOrders = [];
+}
+
 async function extractFromImage(input) {
   const file = input.files[0];
   if(!file) return;
+  await processImageFile(file);
+  input.value = '';
+}
 
-  const status  = document.getElementById('img-status');
-  const preview = document.getElementById('img-preview');
-  const thumb   = document.getElementById('img-thumb');
+function parseTradeValues(text) {
+  // Normalizar texto
+  const lines  = text.split('\n').map(l => l.trim()).filter(l => l);
+  const joined = lines.join(' ');
+  let entry = null, sl = null, tp = null;
 
-  const reader  = new FileReader();
-  reader.onload = async (e) => {
-    const dataUrl   = e.target.result;
-    const base64    = dataUrl.split(',')[1];
-    const mediaType = file.type || 'image/png';
+  // Buscar números en contexto
+  const numRe = /(\d{1,6}[.,]\d{1,5})/g;
 
-    thumb.src             = dataUrl;
-    preview.style.display = 'block';
-    status.style.display  = 'block';
-    status.style.color    = 'var(--accent)';
-    status.textContent    = '⏳ Analizando imagen con IA...';
+  for(let i = 0; i < lines.length; i++) {
+    const line    = lines[i].toLowerCase();
+    const numMatch = lines[i].match(/(\d{1,6}[.,]\d{1,5})/);
+    const num      = numMatch ? parseFloat(numMatch[1].replace(',', '.')) : null;
 
-    if(!BRIDGE_URL) { status.style.color='var(--sell)'; status.textContent='✗ Configura la URL de Railway primero'; return; }
-
-    try {
-      const r = await fetch(`${BRIDGE_URL}/api/extract-image`, {
-        method:  'POST',
-        headers: {'Content-Type': 'application/json'},
-        body:    JSON.stringify({ image: base64, media_type: mediaType })
-      });
-      const data = await r.json();
-
-      if(!data.ok) {
-        status.style.color = 'var(--sell)';
-        status.textContent = '✗ ' + (data.error || 'Error desconocido');
-        return;
-      }
-
-      const values = data.values;
-      let filled   = 0;
-
-      if(values.entry != null) { document.getElementById('entry').value = values.entry; filled++; }
-      if(values.sl    != null) {
-        document.getElementById('sl').value = values.sl;
-        setMode('sl_mode', 'PRICE', document.querySelector('[data-mode="sl_mode"][data-val="PRICE"]'));
-        filled++;
-      }
-      if(values.tp    != null) {
-        document.getElementById('tp').value = values.tp;
-        setMode('tp_mode', 'PRICE', document.querySelector('[data-mode="tp_mode"][data-val="PRICE"]'));
-        filled++;
-      }
-
-      onFormChange();
-      status.style.color = filled > 0 ? 'var(--buy)' : 'var(--warn)';
-      status.textContent = filled > 0
-        ? `✓ Detectado — Entrada: ${values.entry ?? '—'} | SL: ${values.sl ?? '—'} | TP: ${values.tp ?? '—'}`
-        : '⚠ No se detectaron precios en la imagen';
-
-    } catch(err) {
-      status.style.color = 'var(--sell)';
-      status.textContent = '✗ Error: ' + err.message;
+    // Precio de entrada
+    if((line.includes('entrada') || line.includes('entry') || line.includes('open') || line.includes('precio de')) && num) {
+      entry = num;
     }
-    input.value = '';
-  };
-  reader.readAsDataURL(file);
+
+    // Nivel de beneficio / TP — buscar "Precio" en línea siguiente
+    if(line.includes('beneficio') || line.includes('take profit') || line.includes('nivel de b')) {
+      for(let j = i+1; j < Math.min(i+5, lines.length); j++) {
+        const nextLine = lines[j].toLowerCase();
+        const m = lines[j].match(/(\d{1,6}[.,]\d{1,5})/);
+        if(m && nextLine.includes('precio')) { tp = parseFloat(m[1].replace(',','.')); break; }
+        if(m && !nextLine.includes('tick'))  { tp = parseFloat(m[1].replace(',','.')); break; }
+      }
+    }
+
+    // Nivel de stop / SL — buscar "Precio" en línea siguiente
+    if(line.includes('nivel de stop') || line.includes('stop loss') || (line.includes('stop') && !line.includes('beneficio'))) {
+      for(let j = i+1; j < Math.min(i+5, lines.length); j++) {
+        const nextLine = lines[j].toLowerCase();
+        const m = lines[j].match(/(\d{1,6}[.,]\d{1,5})/);
+        if(m && nextLine.includes('precio')) { sl = parseFloat(m[1].replace(',','.')); break; }
+        if(m && !nextLine.includes('tick'))  { sl = parseFloat(m[1].replace(',','.')); break; }
+      }
+    }
+  }
+
+  return { entry, sl, tp };
 }
 const DEFAULT_SYMBOLS = [
   'EURUSD','GBPUSD','USDJPY','USDCHF','AUDUSD','NZDUSD','USDCAD',
@@ -1062,9 +1353,12 @@ function onFormChange() {
     riskText = state.risk_mode === 'PCT' ? `${risk_val}% bal.` : `$${risk_val}`;
   }
 
-  document.getElementById('prev-lots').textContent = lotsText;
-  document.getElementById('prev-risk').textContent = riskText;
-  document.getElementById('prev-rr').textContent   = rrText;
+  const pl = document.getElementById('prev-lots');
+  const pr = document.getElementById('prev-risk');
+  const prr = document.getElementById('prev-rr');
+  if(pl)  pl.textContent  = lotsText;
+  if(pr)  pr.textContent  = riskText;
+  if(prr) prr.textContent = rrText;
 }
 
 // ── SUBMIT ORDER ──────────────────────────────────────────────────────────
@@ -1270,6 +1564,7 @@ function startAutoRefreshCycle() {
     const bar = document.getElementById('refresh-progress');
     if(bar) bar.style.width = '100%';
     await loadOrders();
+    await loadPositions();
     await checkConnection();
     // Reiniciar ciclo si sigue activado
     if(document.getElementById('auto-refresh').checked) {
@@ -1290,6 +1585,7 @@ async function manualRefresh() {
   btn.disabled     = true;
 
   await loadOrders();
+  await loadPositions();
   await checkConnection();
 
   // Feedback de éxito
@@ -1314,7 +1610,65 @@ async function manualRefresh() {
   }
 }
 
-// ── TOAST ─────────────────────────────────────────────────────────────────
+// ── POSICIONES ABIERTAS ───────────────────────────────────────────────────
+async function loadPositions() {
+  if(!state.connected) return;
+  try {
+    const r    = await fetch(`${BRIDGE_URL}/api/positions`);
+    const data = await r.json();
+    renderPositions(data);
+  } catch { /* silencioso */ }
+}
+
+function renderPositions(positions) {
+  const tbody = document.getElementById('positions-body');
+  const countEl = document.getElementById('pos-count');
+  const totalEl = document.getElementById('pos-total-pl');
+  const updEl   = document.getElementById('pos-updated');
+  if(!tbody) return;
+
+  if(countEl) countEl.innerHTML = `Total: <span style="color:var(--text)">${positions.length}</span>`;
+
+  const now = new Date().toLocaleTimeString('es-CL');
+  if(updEl) updEl.textContent = `Actualizado: ${now}`;
+
+  if(!positions.length) {
+    tbody.innerHTML = `<tr><td colspan="11"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Sin posiciones abiertas</div></td></tr>`;
+    if(totalEl) totalEl.textContent = '';
+    return;
+  }
+
+  // Calcular P&L total
+  let totalPL = 0;
+  positions.forEach(p => { totalPL += parseFloat(p.profit || 0) + parseFloat(p.swap || 0); });
+  if(totalEl) {
+    const plColor = totalPL >= 0 ? 'var(--buy)' : 'var(--sell)';
+    totalEl.innerHTML = `P&L Total: <span style="color:${plColor};font-size:13px">${totalPL >= 0 ? '+' : ''}${totalPL.toFixed(2)} USD</span>`;
+  }
+
+  tbody.innerHTML = positions.map(p => {
+    const isBuy   = p.type === 'BUY';
+    const profit  = parseFloat(p.profit || 0);
+    const swap    = parseFloat(p.swap   || 0);
+    const plTotal = profit + swap;
+    const plColor = plTotal >= 0 ? 'var(--buy)' : 'var(--sell)';
+    const sl_display = (!p.sl || p.sl === '0.00000' || p.sl == 0) ? '—' : p.sl;
+    const tp_display = (!p.tp || p.tp === '0.00000' || p.tp == 0) ? '—' : p.tp;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:9px 14px;color:var(--text3);font-size:11px">#${p.ticket}</td>
+      <td style="padding:9px 14px;font-weight:700;color:var(--text)">${p.symbol}</td>
+      <td style="padding:9px 14px;font-weight:700;color:${isBuy?'var(--buy)':'var(--sell)'}">${p.type}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--accent)">${p.lots}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--text)">${p.entry}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--text2)">${p.current}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--text2)">${sl_display}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--text2)">${tp_display}</td>
+      <td style="padding:9px 14px;text-align:right;font-weight:700;color:${plColor}">${plTotal >= 0 ? '+' : ''}${plTotal.toFixed(2)}</td>
+      <td style="padding:9px 14px;text-align:right;color:var(--text3);font-size:11px">${parseFloat(swap).toFixed(2)}</td>
+      <td style="padding:9px 14px;color:var(--text3);font-size:11px;white-space:nowrap">${p.time||'—'}</td>
+    </tr>`;
+  }).join('');
+}
 function toast(msg, type='info') {
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
@@ -1324,5 +1678,42 @@ function toast(msg, type='info') {
   setTimeout(() => t.remove(), 4000);
 }
 </script>
+
+<!-- MODAL BATCH ORDERS -->
+<div id="batch-panel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:998;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;width:min(700px,96vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <!-- Header -->
+    <div style="padding:14px 20px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <span style="font-family:var(--font-mono);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;flex:1">📋 Órdenes detectadas por OCR</span>
+      <button onclick="selectAllBatch(true)"  style="padding:4px 10px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-family:var(--font-mono);font-size:10px;border-radius:3px;cursor:pointer">✓ Todas</button>
+      <button onclick="selectAllBatch(false)" style="padding:4px 10px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-family:var(--font-mono);font-size:10px;border-radius:3px;cursor:pointer">✗ Ninguna</button>
+      <button onclick="clearOcrResult()" style="padding:4px 10px;background:transparent;border:1px solid var(--sell-dim);color:var(--sell);font-family:var(--font-mono);font-size:10px;border-radius:3px;cursor:pointer">✕ Cerrar</button>
+    </div>
+    <!-- Table -->
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px">
+        <thead style="position:sticky;top:0">
+          <tr style="background:var(--bg)">
+            <th style="padding:10px 12px;text-align:center;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);width:36px">✓</th>
+            <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Tipo <small style="color:var(--text3)">(click para cambiar)</small></th>
+            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Entrada</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">SL (pts)</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">TP (pts)</th>
+          </tr>
+        </thead>
+        <tbody id="batch-tbody"></tbody>
+      </table>
+    </div>
+    <!-- Footer -->
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-shrink:0;background:var(--bg3)">
+      <span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">Símbolo: <strong id="batch-symbol" style="color:var(--accent)">—</strong></span>
+      <span style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">Riesgo: <strong id="batch-risk" style="color:var(--text)">—</strong></span>
+      <button onclick="sendBatchOrders()" id="batch-send-btn"
+        style="margin-left:auto;padding:10px 24px;background:var(--accent);border:none;color:#fff;font-family:var(--font-ui);font-weight:700;font-size:13px;border-radius:4px;cursor:pointer;transition:all .15s">
+        ▸ Enviar seleccionadas
+      </button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
