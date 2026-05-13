@@ -24,10 +24,11 @@ CORS(app)
 
 # ── Almacenamiento en memoria ─────────────────────────────────────────────
 # (Railway mantiene el proceso activo entre requests)
-pending_orders = []   # Órdenes pendientes de ejecución por MT5
-active_orders  = []   # Órdenes activas reportadas por MT5
-ea_last_seen   = None # Última vez que el EA hizo ping
-active_version = 0    # Incrementa cada vez que cambian las órdenes activas
+pending_orders = []
+active_orders  = []
+open_positions = []   # Posiciones abiertas con P&L
+ea_last_seen   = None
+active_version = 0
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 def now_str():
@@ -252,6 +253,31 @@ def ping():
     global ea_last_seen
     ea_last_seen = now_str()
     return jsonify({"ok": True, "time": ea_last_seen})
+
+
+# ── POSICIONES ABIERTAS ───────────────────────────────────────────────────
+@app.route("/api/positions", methods=["POST"])
+def update_positions():
+    """EA reporta posiciones abiertas con P&L (cada 5 segundos)."""
+    global open_positions, ea_last_seen
+    ea_last_seen = now_str()
+    try:
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            raw = request.get_data(as_text=True)
+            import re
+            raw_fixed = re.sub(r'(\d),(\d)', r'\1.\2', raw)
+            import json as json_lib
+            data = json_lib.loads(raw_fixed)
+        open_positions = data if isinstance(data, list) else []
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "count": len(open_positions)})
+
+@app.route("/api/positions", methods=["GET"])
+def get_positions():
+    """Panel web lee posiciones abiertas."""
+    return jsonify(open_positions)
 
 
 # ── EXTRACCIÓN IA DESDE IMAGEN ────────────────────────────────────────────
