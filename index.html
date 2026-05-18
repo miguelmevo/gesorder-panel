@@ -309,8 +309,7 @@
     gap: 12px;
     flex-shrink: 0;
     width: 100%;
-    flex-wrap: wrap;
-    background: var(--bg2);
+    background: #2a2a42;
   }
   .refresh-btn {
     padding: 6px 14px;
@@ -454,6 +453,39 @@
   }
   .queue-del:hover { color: var(--sell); }
 
+
+  /* ── INSTANCE SELECTOR ───────────────────────────────────── */
+  .instance-bar {
+    padding: 8px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .instance-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border2);
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all .15s;
+    background: var(--bg3);
+    color: var(--text2);
+    user-select: none;
+  }
+  .instance-chip.active   { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+  .instance-chip.online   .inst-dot { background: var(--buy); }
+  .instance-chip.offline  .inst-dot { background: var(--sell); }
+  .inst-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+  .instance-chip.selected-send { border-color: var(--warn); color: var(--warn); }
+
   /* ── SCROLLBAR ────────────────────────────────────────── */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
@@ -473,6 +505,9 @@
   }
   .status-bar span { color: var(--text2); }
 
+  .no-sb::-webkit-scrollbar { height: 4px; }
+  .no-sb::-webkit-scrollbar-track { background: var(--bg2); }
+  .no-sb::-webkit-scrollbar-thumb { background: var(--bg2); }
   .divider { width: 1px; height: 14px; background: var(--border); }
 
   /* ── RESPONSIVE ──────────────────────────────────────────── */
@@ -557,7 +592,7 @@
       <div class="field-row col2">
         <div class="field" style="position:relative">
           <label>Símbolo</label>
-          <input type="text" id="symbol" placeholder="EURUSD" value="EURUSD"
+          <input type="text" id="symbol" placeholder="GBPJPY+" value="GBPJPY+"
             autocomplete="off"
             oninput="this.value=this.value.toUpperCase();filterSymbols(this.value);onFormChange()"
             onfocus="showSymbolDropdown()"
@@ -664,22 +699,51 @@
   <!-- RIGHT: ORDERS FROM MT5 -->
   <div class="orders-panel">
 
-    <!-- ── POSICIONES ABIERTAS (arriba) ─────────────────────────── -->
-    <div style="border-bottom:2px solid var(--border2)">
-      <div style="padding:10px 20px;display:flex;align-items:center;gap:12px;background:var(--bg2)">
-        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;display:flex;align-items:center;gap:8px">
+
+    <!-- ── INSTANCIAS CONECTADAS ─────────────────────────────── -->
+    <div class="instance-bar" id="instance-bar">
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;white-space:nowrap">MT5:</span>
+      <div id="instance-chips" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Sin instancias conectadas...</span>
+      </div>
+      <span style="margin-left:auto;font-family:var(--font-mono);font-size:9px;color:var(--text3)">Click = ver | Alt+Click = enviar a</span>
+    </div>
+    <!-- ── BARRA DE CONTROLES (arriba de todo) ───────────────────── -->
+    <div style="padding:8px 20px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()">↻ Actualizar</button>
+      <div class="divider"></div>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()" style="display:none">
+        <span id="ar-toggle" style="width:28px;height:15px;background:var(--accent);border-radius:8px;position:relative;display:inline-block;transition:background .2s;flex-shrink:0">
+          <span style="position:absolute;top:2px;left:2px;width:11px;height:11px;background:#fff;border-radius:50%;transition:transform .2s;transform:translateX(13px)"></span>
+        </span>
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2);position:relative">
+          Auto-refresh
+          <span id="refresh-progress-wrap" style="position:absolute;bottom:-4px;left:0;width:100%;height:2px;background:var(--border);border-radius:2px">
+            <span id="refresh-progress" style="display:block;height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width 0.1s linear"></span>
+          </span>
+        </span>
+      </label>
+      <span id="last-update" style="color:var(--text3);font-family:var(--font-mono);font-size:10px;white-space:nowrap">—</span>
+    </div>
+
+    <!-- ── POSICIONES ABIERTAS ───────────────────────────────────── -->
+    <div>
+      <div style="padding:10px 20px;display:flex;align-items:center;gap:12px;background:#2a2a42;border-top:1px solid var(--border2);min-height:0;flex-wrap:nowrap;overflow:hidden">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;display:flex;align-items:center;gap:8px;white-space:nowrap">
           <span style="width:3px;height:14px;background:var(--warn);border-radius:2px;display:inline-block"></span>
           Posiciones Abiertas
         </div>
-        <span id="pos-count" style="font-family:var(--font-mono);font-size:11px;color:var(--text2)">Total: <span style="color:var(--text)">—</span></span>
-        <span id="pos-total-pl" style="font-family:var(--font-mono);font-size:12px;font-weight:700;margin-left:4px"></span>
-        <div style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text3)" id="pos-updated">—</div>
+        <span id="pos-count" style="font-family:var(--font-mono);font-size:11px;color:var(--text2);white-space:nowrap">Total: <span style="color:var(--text)">—</span></span>
+        <span id="pos-total-pl" style="font-family:var(--font-mono);font-size:11px;font-weight:700;margin-left:4px;white-space:nowrap"></span>
+        <span id="pos-updated" style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text3);white-space:nowrap">—</span>
       </div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px">
           <thead>
             <tr style="background:var(--bg)">
               <th style="padding:7px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap">Ticket</th>
+              <th style="padding:7px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Instancia</th>
               <th style="padding:7px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Símbolo</th>
               <th style="padding:7px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Tipo</th>
               <th style="padding:7px 14px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Lotes</th>
@@ -692,43 +756,30 @@
               <th style="padding:7px 14px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Hora</th>
             </tr>
           </thead>
-          <tbody id="positions-body">
-            <tr><td colspan="11">
-              <div style="padding:16px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--font-mono)">Sin posiciones abiertas</div>
+          <tbody id="positions-body" style="line-height:normal">
+            <tr><td colspan="11" style="height:210px;text-align:center;vertical-align:middle;color:var(--text3);font-size:12px;font-family:var(--font-mono)">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+                <span style="font-size:32px">📭</span>
+                Sin posiciones abiertas
+              </div>
             </td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- ── ÓRDENES PENDIENTES (abajo) ────────────────────────────── -->
+    <!-- ── ÓRDENES PENDIENTES ────────────────────────────────────── -->
     <div>
-      <div class="orders-toolbar">
+      <div class="orders-toolbar" style="border-top:1px solid var(--border2)">
         <div class="panel-header" style="padding:0;border:none;white-space:nowrap">Órdenes Pendientes MT5</div>
-        <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()">↻ Actualizar</button>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:14px;flex-shrink:0">
-          <div class="orders-count" style="white-space:nowrap">Total: <span id="orders-count">—</span></div>
-          <div class="divider"></div>
-          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap">
-            <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()" style="display:none">
-            <span id="ar-toggle" style="width:28px;height:15px;background:var(--accent);border-radius:8px;position:relative;display:inline-block;transition:background .2s;flex-shrink:0">
-              <span style="position:absolute;top:2px;left:2px;width:11px;height:11px;background:#fff;border-radius:50%;transition:transform .2s;transform:translateX(13px)"></span>
-            </span>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text2);position:relative">
-              Auto-refresh
-              <span id="refresh-progress-wrap" style="position:absolute;bottom:-4px;left:0;width:100%;height:2px;background:var(--border);border-radius:2px">
-                <span id="refresh-progress" style="display:block;height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width 0.1s linear"></span>
-              </span>
-            </span>
-          </label>
-          <span id="last-update" style="color:var(--text3);font-family:var(--font-mono);font-size:10px;white-space:nowrap">—</span>
-        </div>
+        <div class="orders-count" style="white-space:nowrap;margin-left:8px">Total: <span id="orders-count">—</span></div>
       </div>
       <div style="overflow-x:auto">
         <table id="orders-table" style="width:100%;border-collapse:collapse">
           <thead>
             <tr>
               <th>Ticket</th>
+              <th>Instancia</th>
               <th>Símbolo</th>
               <th>Tipo</th>
               <th>Entrada</th>
@@ -742,7 +793,7 @@
           </thead>
           <tbody id="orders-body">
             <tr><td colspan="10">
-              <div class="empty-state">
+              <div class="empty-state" style="height:230px">
                 <div class="empty-icon">⏳</div>
                 Conectando con MT5...
               </div>
@@ -857,38 +908,72 @@ function parseTradeTable(text) {
   const orders = [];
   const lines  = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
+  // Primera pasada: recolectar todos los tripletes
+  const rawOrders = [];
   for(const line of lines) {
-    // Línea con precio decimal + dos enteros (ej: "212.894 180 179")
-    const m = line.match(/^(\d{2,6}[.,]\d{1,5})\s+(\d{1,5})\s+(\d{1,5})\s*$/);
-    if(m) {
-      orders.push({
-        type:  'BUY_STOP',
-        entry: parseFloat(m[1].replace(',', '.')),
-        sl:    parseInt(m[2]),
-        tp:    parseInt(m[3]),
-      });
-    }
+    let norm = line.replace(/[|–—]/g, ' ').replace(/\s+-\s+/g, ' ');
+    // Corregir 6 dígitos sin decimal: 213587 → 213.587
+    norm = norm.replace(/\b(\d{3})(\d{3})\b/g, (_, a, b) => `${a}.${b}`);
+
+    const matches = norm.match(/\d{2,6}[.,]\d{1,5}/g);
+    if(!matches) continue;
+    const nums = matches.map(m => parseFloat(m.replace(',', '.'))).filter(n => !isNaN(n) && n > 0);
+    if(nums.length === 3) rawOrders.push(nums);
+  }
+
+  if(!rawOrders.length) return orders;
+
+  // Calcular mediana de cada columna para detectar outliers
+  function colMedian(col) {
+    const vals = rawOrders.map(r => r[col]).slice().sort((a,b) => a-b);
+    return vals[Math.floor(vals.length/2)];
+  }
+  const medEntry = colMedian(0);
+  const medSL    = colMedian(1);
+  const medTP    = colMedian(2);
+
+  // Corregir outliers: si un valor está >3 unidades de la mediana de su columna,
+  // intentar sustituir '8' por '3' en la representación del número
+  function tryFix(n, med) {
+    if(Math.abs(n - med) <= 3) return n;
+    const s     = n.toString();
+    const fixed = s.replace('8', '3');
+    if(fixed === s) return n;
+    const f = parseFloat(fixed);
+    return Math.abs(f - med) < Math.abs(n - med) ? f : n;
+  }
+
+  for(const [e, sl, tp] of rawOrders) {
+    const entry   = tryFix(e,  medEntry);
+    const slFixed = tryFix(sl, medSL);
+    const tpFixed = tryFix(tp, medTP);
+
+    const slIsTick = Number.isInteger(slFixed) && slFixed < 2000;
+    const tpIsTick = Number.isInteger(tpFixed) && tpFixed < 2000;
+
+    orders.push({
+      type:    'BUY_STOP',
+      entry:   entry,
+      sl:      slFixed,
+      tp:      tpFixed,
+      sl_mode: slIsTick ? 'POINTS' : 'PRICE',
+      tp_mode: tpIsTick ? 'POINTS' : 'PRICE',
+    });
   }
 
   if(orders.length < 2) return orders;
 
-  // Heurística robusta: buscar el punto de quiebre donde los precios
-  // pasan de zona alta (BUY) a zona baja (SELL).
-  // En lugar del máximo puntual (frágil ante errores OCR), usamos
-  // la mediana como divisor: precios >= mediana → BUY, < mediana → SELL.
+  // Mediana sobre entradas corregidas
   const prices = orders.map(o => o.entry).slice().sort((a,b) => a - b);
-  const mid    = prices.length % 2 === 0
-    ? (prices[prices.length/2 - 1] + prices[prices.length/2]) / 2
-    : prices[Math.floor(prices.length/2)];
+  const n      = prices.length;
+  const mid    = n % 2 === 0
+    ? (prices[n/2 - 1] + prices[n/2]) / 2
+    : prices[Math.floor(n/2)];
 
-  // Asignar tipo por lado de la mediana
   for(const o of orders) {
     o.type = o.entry >= mid ? 'BUY_STOP' : 'SELL_STOP';
   }
 
-  // Verificar consistencia: si hay un bloque inicial de BUY seguido de SELL,
-  // respetar esa estructura (el orden de la tabla suele ser BUY arriba, SELL abajo)
-  // En caso de mezcla, mantener la asignación por mediana.
   return orders;
 }
 
@@ -905,8 +990,8 @@ function showBatchPanel(orders) {
 
   tbody.innerHTML = orders.map((o, i) => {
     const isBuy = o.type.startsWith('BUY');
-    return `<tr id="batch-row-${i}" onclick="toggleBatchRow(${i})" style="border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
-      <td style="padding:10px 12px;text-align:center" onclick="event.stopPropagation();toggleBatchRow(${i})">
+    return `<tr id="batch-row-${i}" style="border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
+      <td style="padding:10px 12px;text-align:center" onclick="toggleBatchRow(${i})">
         <div id="batch-cb-${i}" data-checked="true"
           style="width:18px;height:18px;border:2px solid var(--accent);border-radius:3px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s">
           <span style="color:#fff;font-size:12px;line-height:1">✓</span>
@@ -918,9 +1003,24 @@ function showBatchPanel(orders) {
           ${o.type.replace('_',' ')}
         </button>
       </td>
-      <td style="padding:10px 16px;text-align:right;color:var(--text);font-weight:600">${o.entry}</td>
-      <td style="padding:10px 16px;text-align:right;color:var(--text2)">${o.sl}</td>
-      <td style="padding:10px 16px;text-align:right;color:var(--text2)">${o.tp}</td>
+      <td style="padding:6px 8px" onclick="event.stopPropagation()">
+        <input type="number" value="${o.entry}" step="0.001"
+          onchange="batchOrders[${i}].entry=parseFloat(this.value)"
+          style="width:90px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:12px;font-weight:600;padding:4px 6px;border-radius:3px;outline:none;text-align:right"
+          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+      </td>
+      <td style="padding:6px 8px" onclick="event.stopPropagation()">
+        <input type="number" value="${o.sl}" step="0.001"
+          onchange="batchOrders[${i}].sl=parseFloat(this.value)"
+          style="width:80px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-family:var(--font-mono);font-size:12px;padding:4px 6px;border-radius:3px;outline:none;text-align:right"
+          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+      </td>
+      <td style="padding:6px 8px" onclick="event.stopPropagation()">
+        <input type="number" value="${o.tp}" step="0.001"
+          onchange="batchOrders[${i}].tp=parseFloat(this.value)"
+          style="width:80px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-family:var(--font-mono);font-size:12px;padding:4px 6px;border-radius:3px;outline:none;text-align:right"
+          onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+      </td>
     </tr>`;
   }).join('');
 
@@ -985,14 +1085,15 @@ async function sendBatchOrders() {
       type:       o.type,
       entry:      o.entry,
       sl:         o.sl,
-      sl_mode:    'POINTS',
+      sl_mode:    o.sl_mode || 'POINTS',
       tp:         o.tp,
-      tp_mode:    'POINTS',
+      tp_mode:    o.tp_mode || 'POINTS',
       lots:       riskMode === 'LOTS' ? riskVal : 0.01,
       risk_value: riskVal,
       risk_mode:  riskMode,
       rr:         2,
       comment:    'GesOP-Batch',
+      target_instances: getTargetInstances(),
     };
     try {
       const r = await fetch(`${BRIDGE_URL}/api/order`, {
@@ -1375,6 +1476,7 @@ async function submitOrder() {
 
   const order = {
     symbol, entry, sl, tp, rr, comment,
+    target_instances: getTargetInstances(),
     type:       state.type,
     sl_mode:    state.sl_mode,
     tp_mode:    state.tp_mode,
@@ -1477,7 +1579,7 @@ async function loadOrders() {
 function renderOrders(orders) {
   const tbody = document.getElementById('orders-body');
   if(!orders.length) {
-    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">📋</div>No hay órdenes pendientes con magic 99001</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state" style="height:230px"><div class="empty-icon">📋</div>No hay órdenes pendientes con magic 99001</div></td></tr>`;
     return;
   }
   tbody.innerHTML = orders.map(o => {
@@ -1486,6 +1588,7 @@ function renderOrders(orders) {
     const sl_display = o.sl === '0.00000' || o.sl === '0' || !o.sl ? '—' : o.sl;
     return `<tr>
       <td class="td-ticket">#${o.ticket}</td>
+      <td style="font-family:var(--font-mono);font-size:10px;color:var(--accent)">${o.instance_name||o.instance_id||'—'}</td>
       <td><strong>${o.symbol}</strong></td>
       <td class="${isBuy?'td-type-buy':'td-type-sell'}">${o.type}</td>
       <td>${o.entry}</td>
@@ -1562,6 +1665,7 @@ function startAutoRefreshCycle() {
     clearInterval(progressInterval);
     const bar = document.getElementById('refresh-progress');
     if(bar) bar.style.width = '100%';
+    await loadInstances();
     await loadOrders();
     await loadPositions();
     await checkConnection();
@@ -1583,6 +1687,7 @@ async function manualRefresh() {
   btn.style.borderColor = 'var(--accent)';
   btn.disabled     = true;
 
+  await loadInstances();
   await loadOrders();
   await loadPositions();
   await checkConnection();
@@ -1609,11 +1714,84 @@ async function manualRefresh() {
   }
 }
 
-// ── POSICIONES ABIERTAS ───────────────────────────────────────────────────
+// ── INSTANCIAS MT5 ───────────────────────────────────────────────────────
+let state_instances     = [];       // Lista de instancias conocidas
+let selected_view_inst  = null;     // null = todas, o instance_id
+let selected_send_insts = new Set();// IDs seleccionados para enviar
+
+async function loadInstances() {
+  if(!state.connected) return;
+  try {
+    const r    = await fetch(`${BRIDGE_URL}/api/instances`);
+    const data = await r.json();
+    state_instances = data;
+    renderInstanceChips();
+  } catch { /* silencioso */ }
+}
+
+function renderInstanceChips() {
+  const container = document.getElementById('instance-chips');
+  if(!container) return;
+  if(!state_instances.length) {
+    container.innerHTML = '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text3)">Sin instancias conectadas...</span>';
+    return;
+  }
+
+  container.innerHTML = state_instances.map(inst => {
+    const isViewSel  = selected_view_inst  === inst.id;
+    const isSendSel  = selected_send_insts.has(inst.id);
+    let cls = `instance-chip ${inst.online ? 'online' : 'offline'}`;
+    if(isSendSel) cls += ' selected-send';
+    else if(isViewSel) cls += ' active';
+
+    const bal = inst.balance ? `$${parseFloat(inst.balance).toLocaleString('es-CL',{minimumFractionDigits:0,maximumFractionDigits:0})}` : '';
+    return `<div class="${cls}" onclick="selectInstance('${inst.id}', event)" title="Click: filtrar | Alt+Click: enviar a esta instancia">
+      <div class="inst-dot"></div>
+      <span><strong>${inst.name}</strong> #${inst.account}</span>
+      ${bal ? `<span style="color:var(--text3)">${bal}</span>` : ''}
+      ${isSendSel ? '<span style="font-size:9px">✉</span>' : ''}
+    </div>`;
+  }).join('');
+
+  // Botón "Todas"
+  const allActive = !selected_view_inst && selected_send_insts.size === 0;
+  container.innerHTML = `<div class="instance-chip ${allActive?'active':''}" onclick="selectAll_inst()">
+    <div class="inst-dot" style="background:var(--accent)"></div>
+    Todas
+  </div>` + container.innerHTML;
+}
+
+function selectInstance(id, event) {
+  if(event && event.altKey) {
+    // Alt+Click: toggle para enviar
+    if(selected_send_insts.has(id)) selected_send_insts.delete(id);
+    else selected_send_insts.add(id);
+  } else {
+    // Click normal: filtrar vista
+    selected_view_inst = (selected_view_inst === id) ? null : id;
+  }
+  renderInstanceChips();
+  loadOrders();
+  loadPositions();
+}
+
+function selectAll_inst() {
+  selected_view_inst  = null;
+  selected_send_insts.clear();
+  renderInstanceChips();
+  loadOrders();
+  loadPositions();
+}
+
+function getTargetInstances() {
+  // Si hay instancias seleccionadas para enviar, usarlas; si no, todas
+  return selected_send_insts.size > 0 ? [...selected_send_insts] : [];
+}
 async function loadPositions() {
   if(!state.connected) return;
   try {
-    const r    = await fetch(`${BRIDGE_URL}/api/positions`);
+    const iid  = selected_view_inst ? `?instance=${selected_view_inst}` : '';
+    const r    = await fetch(`${BRIDGE_URL}/api/positions${iid}`);
     const data = await r.json();
     renderPositions(data);
   } catch { /* silencioso */ }
@@ -1632,7 +1810,7 @@ function renderPositions(positions) {
   if(updEl) updEl.textContent = `Actualizado: ${now}`;
 
   if(!positions.length) {
-    tbody.innerHTML = `<tr><td colspan="11"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Sin posiciones abiertas</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="height:210px;text-align:center;vertical-align:middle;color:var(--text3);font-size:12px;font-family:var(--font-mono)"><div style="display:flex;flex-direction:column;align-items:center;gap:8px"><span style="font-size:32px">📭</span>Sin posiciones abiertas</div></td></tr>`;
     if(totalEl) totalEl.textContent = '';
     return;
   }
@@ -1655,6 +1833,7 @@ function renderPositions(positions) {
     const tp_display = (!p.tp || p.tp === '0.00000' || p.tp == 0) ? '—' : p.tp;
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 14px;color:var(--text3);font-size:11px">#${p.ticket}</td>
+      <td style="padding:9px 14px;font-family:var(--font-mono);font-size:10px;color:var(--accent)">${p.instance_name||p.instance_id||'—'}</td>
       <td style="padding:9px 14px;font-weight:700;color:var(--text)">${p.symbol}</td>
       <td style="padding:9px 14px;font-weight:700;color:${isBuy?'var(--buy)':'var(--sell)'}">${p.type}</td>
       <td style="padding:9px 14px;text-align:right;color:var(--accent)">${p.lots}</td>
@@ -1696,8 +1875,8 @@ function toast(msg, type='info') {
             <th style="padding:10px 12px;text-align:center;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);width:36px">✓</th>
             <th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Tipo <small style="color:var(--text3)">(click para cambiar)</small></th>
             <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">Entrada</th>
-            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">SL (pts)</th>
-            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">TP (pts)</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">SL</th>
+            <th style="padding:10px 16px;text-align:right;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border)">TP</th>
           </tr>
         </thead>
         <tbody id="batch-tbody"></tbody>
