@@ -24,10 +24,11 @@ CORS(app)
 
 # ── Almacenamiento en memoria ─────────────────────────────────────────────
 # (Railway mantiene el proceso activo entre requests)
-pending_orders = []
-active_orders  = []
-open_positions = []   # Posiciones abiertas con P&L
-ea_last_seen   = None
+pending_orders = []        # [{...order, target_instances:[id1,id2]}]
+active_orders  = {}        # {instance_id: [...orders]}
+open_positions = {}        # {instance_id: [...positions]}
+instances      = {}        # {instance_id: {name, account, balance, last_seen}}
+ea_last_seen   = None      # legacy compat
 active_version = 0
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -79,8 +80,43 @@ def api_status():
         "ea_online": ea_last_seen is not None,
         "ea_last_seen": ea_last_seen,
         "pending_count": len([o for o in pending_orders if o["status"] == "pending"]),
-        "active_count":  len(active_orders),
+        "instances_count": len(instances),
     })
+
+
+
+# ── INSTANCIAS MT5 ────────────────────────────────────────────────────────
+@app.route("/api/instance/ping", methods=["POST"])
+def instance_ping():
+    """EA registra/actualiza su presencia."""
+    global ea_last_seen
+    data = request.get_json(force=True) or {}
+    iid  = str(data.get("instance_id", "default"))
+    instances[iid] = {
+        "id":        iid,
+        "name":      str(data.get("name",    "MT5")),
+        "account":   str(data.get("account", "")),
+        "balance":   float(data.get("balance", 0)),
+        "last_seen": now_str(),
+        "online":    True,
+    }
+    ea_last_seen = now_str()
+    return jsonify({"ok": True})
+
+@app.route("/api/instances", methods=["GET"])
+def get_instances():
+    """Lista instancias con estado online/offline."""
+    from datetime import datetime, timedelta
+    result = []
+    for inst in instances.values():
+        try:
+            t = datetime.strptime(inst["last_seen"], "%Y-%m-%d %H:%M:%S")
+            online = (datetime.utcnow() - t).total_seconds() < 35
+        except:
+            online = False
+        result.append({**inst, "online": online})
+    return jsonify(result)
+
 
 # ── WEB APP → API ─────────────────────────────────────────────────────────
 @app.route("/api/order", methods=["POST"])
@@ -97,10 +133,15 @@ def add_order():
     if entry <= 0:
         return jsonify({"ok": False, "error": "Precio de entrada inválido"}), 400
 
+    target = data.get("target_instances", [])
+    if not isinstance(target, list): target = []
+
     order = {
-        "id":         str(uuid.uuid4())[:8].upper(),
-        "status":     "pending",
-        "created_at": now_str(),
+        "id":               str(uuid.uuid4())[:8].upper(),
+        "status":           "pending",
+        "created_at":       now_str(),
+        "target_instances": target,
+        "executed_by":      [],
         "symbol":     symbol,
         "type":       str(data.get("type",       "BUY_LIMIT")).upper(),
         "entry":      entry,
@@ -130,11 +171,16 @@ def pending_raw():
     global ea_last_seen
     ea_last_seen = now_str()
 
-    orders = [o for o in pending_orders if o["status"] == "pending"]
+    instance_id = request.args.get("instance", "")
+    orders = [
+        o for o in pending_orders
+        if o["status"] == "pending"
+        and (not o.get("target_instances") or instance_id in o["target_instances"])
+    ]
     if not orders:
         return Response("# no_orders\n", mimetype="text/plain")
 
-    # Marcar inmediatamente como "processing" para evitar duplicados
+    # Marcar como "processing" para evitar duplicados
     for o in orders:
         o["status"] = "processing"
         o["fetched_at"] = now_str()
@@ -258,26 +304,35 @@ def ping():
 # ── POSICIONES ABIERTAS ───────────────────────────────────────────────────
 @app.route("/api/positions", methods=["POST"])
 def update_positions():
-    """EA reporta posiciones abiertas con P&L (cada 5 segundos)."""
-    global open_positions, ea_last_seen
+    """EA reporta posiciones abiertas — almacena por instancia."""
+    global ea_last_seen
     ea_last_seen = now_str()
+    instance_id  = request.args.get("instance", "default")
     try:
         data = request.get_json(force=True, silent=True)
         if data is None:
             raw = request.get_data(as_text=True)
-            import re
-            raw_fixed = re.sub(r'(\d),(\d)', r'\1.\2', raw)
-            import json as json_lib
-            data = json_lib.loads(raw_fixed)
-        open_positions = data if isinstance(data, list) else []
+            import re, json as json_lib
+            data = json_lib.loads(re.sub(r'(\d),(\d)', r'\1.\2', raw))
+        open_positions[instance_id] = data if isinstance(data, list) else []
+        if instance_id in instances:
+            instances[instance_id]["last_seen"] = now_str()
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
-    return jsonify({"ok": True, "count": len(open_positions)})
+    return jsonify({"ok": True, "count": len(open_positions.get(instance_id, []))})
 
 @app.route("/api/positions", methods=["GET"])
 def get_positions():
-    """Panel web lee posiciones abiertas."""
-    return jsonify(open_positions)
+    """Devuelve posiciones. ?instance=ID para filtrar, o todas."""
+    instance_id = request.args.get("instance", "")
+    if instance_id:
+        return jsonify(open_positions.get(instance_id, []))
+    all_pos = []
+    for iid, positions in open_positions.items():
+        for p in positions:
+            all_pos.append({**p, "instance_id": iid,
+                            "instance_name": instances.get(iid, {}).get("name", iid)})
+    return jsonify(all_pos)
 
 
 # ── EXTRACCIÓN IA DESDE IMAGEN ────────────────────────────────────────────
