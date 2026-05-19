@@ -269,21 +269,25 @@ def get_active():
     """Devuelve órdenes activas con instance_id e instance_name."""
     try:
         instance_id = request.args.get("instance", "")
-        # Formato viejo: lista plana
+        # Formato viejo: lista plana — envolverla con info de instancia
         if isinstance(active_orders, list):
-            return jsonify(active_orders)
+            fallback_name = next((i.get("name","?") for i in instances.values()), "MT5")
+            return jsonify([{**o, "instance_id": "default", "instance_name": fallback_name}
+                            for o in active_orders])
         # Filtro por instancia
         if instance_id:
-            return jsonify(active_orders.get(instance_id, []))
+            orders = active_orders.get(instance_id, [])
+            name   = instances.get(instance_id, {}).get("name", instance_id)
+            return jsonify([{**o, "instance_id": instance_id, "instance_name": name}
+                            for o in orders])
         # Todas las instancias combinadas
         all_orders = []
         for iid, orders in active_orders.items():
             if not isinstance(orders, list):
                 continue
+            name = instances.get(iid, {}).get("name", iid)
             for o in orders:
-                all_orders.append({**o,
-                    "instance_id":   iid,
-                    "instance_name": instances.get(iid, {}).get("name", iid)})
+                all_orders.append({**o, "instance_id": iid, "instance_name": name})
         return jsonify(all_orders)
     except Exception as e:
         print(f"[get_active] error: {e}")
