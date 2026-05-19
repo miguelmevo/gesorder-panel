@@ -264,10 +264,19 @@ def update_active():
     return jsonify({"ok": True, "count": len(active_orders), "version": active_version})
 
 @app.route("/api/orders/active", methods=["GET"])
-@app.route("/api/orders", methods=["GET"])  # alias para compatibilidad web panel
+@app.route("/api/orders", methods=["GET"])
 def get_active():
-    """Web app lee las órdenes activas en MT5."""
-    return jsonify(active_orders)
+    """Devuelve órdenes activas con instance_id e instance_name."""
+    instance_id = request.args.get("instance", "")
+    if instance_id:
+        return jsonify(active_orders.get(instance_id, []))
+    all_orders = []
+    for iid, orders in active_orders.items():
+        for o in orders:
+            all_orders.append({**o,
+                "instance_id":   iid,
+                "instance_name": instances.get(iid, {}).get("name", iid)})
+    return jsonify(all_orders)
 
 @app.route("/api/orders/history", methods=["GET"])
 def get_history():
