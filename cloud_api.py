@@ -267,16 +267,27 @@ def update_active():
 @app.route("/api/orders", methods=["GET"])
 def get_active():
     """Devuelve órdenes activas con instance_id e instance_name."""
-    instance_id = request.args.get("instance", "")
-    if instance_id:
-        return jsonify(active_orders.get(instance_id, []))
-    all_orders = []
-    for iid, orders in active_orders.items():
-        for o in orders:
-            all_orders.append({**o,
-                "instance_id":   iid,
-                "instance_name": instances.get(iid, {}).get("name", iid)})
-    return jsonify(all_orders)
+    try:
+        instance_id = request.args.get("instance", "")
+        # Formato viejo: lista plana
+        if isinstance(active_orders, list):
+            return jsonify(active_orders)
+        # Filtro por instancia
+        if instance_id:
+            return jsonify(active_orders.get(instance_id, []))
+        # Todas las instancias combinadas
+        all_orders = []
+        for iid, orders in active_orders.items():
+            if not isinstance(orders, list):
+                continue
+            for o in orders:
+                all_orders.append({**o,
+                    "instance_id":   iid,
+                    "instance_name": instances.get(iid, {}).get("name", iid)})
+        return jsonify(all_orders)
+    except Exception as e:
+        print(f"[get_active] error: {e}")
+        return jsonify([]), 200
 
 @app.route("/api/orders/history", methods=["GET"])
 def get_history():
