@@ -39,7 +39,11 @@ def order_to_pipe(o: dict) -> str:
     """
     Convierte un orden a formato pipe que entiende el EA de MT5.
     ADD|SYMBOL|TYPE|ENTRY|SL|SL_MODE|TP|TP_MODE|LOTS|RISK_V|RISK_M|RR|COMMENT|ID
+    CANCEL|||||||||||||TICKET
     """
+    if o.get("action") == "CANCEL":
+        ticket = o.get("ticket", o.get("id", ""))
+        return f"CANCEL|||||||||||||{ticket}"
     return "|".join([
         "ADD",
         str(o.get("symbol",    "EURUSD")).upper(),
@@ -310,14 +314,14 @@ def cancel_pending():
                 return jsonify({"ok": True, "cancelled": "pending_order"})
 
     if ticket:
-        # Cancelación de orden ya en MT5 — el EA la leerá en el próximo poll
+        instance_id = str(data.get("instance_id", ""))
         pending_orders.append({
-            "id":         str(uuid.uuid4())[:8].upper(),
-            "status":     "pending",
-            "created_at": now_str(),
-            "action":     "CANCEL",
-            "ticket":     ticket,
-            # Rellenos vacíos para compatibilidad pipe
+            "id":               ticket,          # ticket como ID → EA lo lee en p[13]
+            "status":           "pending",
+            "created_at":       now_str(),
+            "action":           "CANCEL",
+            "ticket":           ticket,
+            "target_instances": [instance_id] if instance_id else [],
             "symbol":"","type":"","entry":0,"sl":0,"sl_mode":"PRICE",
             "tp":0,"tp_mode":"PRICE","lots":0,"risk_value":0,
             "risk_mode":"LOTS","rr":0,"comment":"cancel",
