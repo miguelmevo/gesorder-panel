@@ -105,17 +105,29 @@ def instance_ping():
 
 @app.route("/api/instances", methods=["GET"])
 def get_instances():
-    """Lista instancias con estado online/offline."""
-    from datetime import datetime, timedelta
-    result = []
-    for inst in instances.values():
+    """Lista instancias online, deduplicando por número de cuenta."""
+    from datetime import datetime
+    now_dt  = datetime.utcnow()
+    seen    = {}   # account → best instance
+
+    for inst in list(instances.values()):
         try:
-            t = datetime.strptime(inst["last_seen"], "%Y-%m-%d %H:%M:%S")
-            online = (datetime.utcnow() - t).total_seconds() < 35
+            t      = datetime.strptime(inst["last_seen"], "%Y-%m-%d %H:%M:%S")
+            age    = (now_dt - t).total_seconds()
+            online = age < 35
         except:
             online = False
-        result.append({**inst, "online": online})
-    return jsonify(result)
+            age    = 9999
+
+        if not online:
+            continue  # ignorar offline
+
+        acc = inst.get("account", inst["id"])
+        # Quedarse con la instancia más reciente por cuenta
+        if acc not in seen or inst["last_seen"] > seen[acc]["last_seen"]:
+            seen[acc] = {**inst, "online": True}
+
+    return jsonify(list(seen.values()))
 
 
 # ── WEB APP → API ─────────────────────────────────────────────────────────
