@@ -241,27 +241,24 @@ def recover_stuck():
 
 @app.route("/api/orders/active", methods=["POST"])
 def update_active():
-    """MT5 EA reporta sus órdenes pendientes activas (reemplaza todo)."""
-    global active_orders, ea_last_seen, active_version
-    ea_last_seen = now_str()
-    
+    """MT5 EA reporta sus órdenes pendientes activas — almacena por instancia."""
+    global ea_last_seen, active_version
+    ea_last_seen   = now_str()
+    instance_id    = request.args.get("instance", "default")
     try:
         data = request.get_json(force=True, silent=True)
         if data is None:
-            # Intentar limpiar el body manualmente
             raw = request.get_data(as_text=True)
-            # Reemplazar comas decimales por puntos si el locale de MT5 usa coma
-            import re
-            raw_fixed = re.sub(r'(\d),(\d)', r'\1.\2', raw)
-            import json as json_lib
-            data = json_lib.loads(raw_fixed)
-        active_orders = data if isinstance(data, list) else []
+            import re, json as json_lib
+            data = json_lib.loads(re.sub(r'(\d),(\d)', r'\1.\2', raw))
+        active_orders[instance_id] = data if isinstance(data, list) else []
         active_version += 1
+        if instance_id in instances:
+            instances[instance_id]["last_seen"] = now_str()
     except Exception as e:
-        print(f"[{now_str()}] Error parseando active orders: {e} | raw: {request.get_data(as_text=True)[:200]}")
+        print(f"[{now_str()}] Error parseando active orders: {e}")
         return jsonify({"ok": False, "error": str(e)}), 400
-    
-    return jsonify({"ok": True, "count": len(active_orders), "version": active_version})
+    return jsonify({"ok": True, "count": len(active_orders.get(instance_id, []))})
 
 @app.route("/api/orders/active", methods=["GET"])
 @app.route("/api/orders", methods=["GET"])
